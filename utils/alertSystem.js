@@ -226,7 +226,7 @@ export class AlertSystem {
      * Helper methods
      */
     generateId() {
-        return `alert_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        return `alert_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
     }
 
     getPriorityIcon(priority) {
