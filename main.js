@@ -4,6 +4,7 @@ import { initializeData } from './data/dataManager.js';
 import { updateStatusBar } from './utils/ui.js';
 
 // Import all modules
+import HomeModule from './modules/home/index.js';
 import CalibrationModule from './modules/calibration/index.js';
 import CrowdWisdomModule from './modules/crowd-wisdom/index.js';
 import PriceDiscoveryModule from './modules/price-discovery/index.js';
@@ -17,6 +18,7 @@ import TemporalModule from './modules/temporal/index.js';
 
 // Module registry
 const modules = {
+    'home': HomeModule,
     'calibration': CalibrationModule,
     'crowd-wisdom': CrowdWisdomModule,
     'price-discovery': PriceDiscoveryModule,
@@ -45,7 +47,7 @@ async function init() {
         await initializeData();
         
         // Load default module
-        await loadModule('calibration');
+        await loadModule('home');
         
         // Start status bar updates
         setInterval(updateStatusBar, 1000);
