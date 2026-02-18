@@ -1,0 +1,85 @@
+// Metaculus API Integration
+// Public API for fetching questions and community predictions
+
+const METACULUS_API = 'https://www.metaculus.com/api2';
+
+/**
+ * Fetch questions from Metaculus
+ */
+export async function fetchMarkets() {
+    try {
+        const response = await fetch(`${METACULUS_API}/questions/?status=resolved&limit=100`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Transform to our format (only binary questions)
+        return (data.results || [])
+            .filter(q => q.possibilities && q.possibilities.type === 'binary')
+            .map(transformMetaculusData);
+    } catch (error) {
+        console.warn('Metaculus API error:', error);
+        throw error;
+    }
+}
+
+/**
+ * Transform Metaculus data to our internal format
+ */
+function transformMetaculusData(question) {
+    const communityPrediction = question.community_prediction 
+        ? question.community_prediction.full.q2 
+        : 0.5;
+    
+    return {
+        id: `metaculus_${question.id}`,
+        title: question.title,
+        category: categorizeQuestion(question.title),
+        platform: 'metaculus',
+        createdAt: question.created_time,
+        resolvedAt: question.resolve_time,
+        resolved: question.resolution !== null,
+        outcome: question.resolution === 1 ? 1 : (question.resolution === 0 ? 0 : null),
+        currentProbability: communityPrediction,
+        finalProbability: question.resolution !== null ? communityPrediction : null,
+        volume: question.number_of_predictions || 0,
+        liquidity: 0.8, // Metaculus doesn't have liquidity concept
+        traders: question.number_of_predictors || 0,
+        priceHistory: []
+    };
+}
+
+/**
+ * Categorize question based on title
+ */
+function categorizeQuestion(title) {
+    if (!title) return 'other';
+    
+    const lower = title.toLowerCase();
+    
+    if (lower.includes('election') || lower.includes('president') || lower.includes('political')) {
+        return 'politics';
+    }
+    if (lower.includes('bitcoin') || lower.includes('crypto') || lower.includes('blockchain')) {
+        return 'crypto';
+    }
+    if (lower.includes('gdp') || lower.includes('economy') || lower.includes('market')) {
+        return 'economics';
+    }
+    if (lower.includes('science') || lower.includes('research') || lower.includes('discovery')) {
+        return 'science';
+    }
+    if (lower.includes('sports') || lower.includes('championship')) {
+        return 'sports';
+    }
+    
+    return 'other';
+}

@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prediction Markets Analysis Platform</title>
+    
+    <!-- TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- KaTeX for math rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    
+    <link rel="stylesheet" href="./styles/main.css">
+</head>
+<body class="bg-slate-950 text-slate-200 font-sans">
+    <div id="app" class="h-screen flex flex-col overflow-hidden">
+        <!-- Top Bar -->
+        <header id="top-bar" class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <h1 class="text-xl font-bold text-cyan-400 font-mono">PREDICTION MARKETS TERMINAL</h1>
+                <div class="w-2 h-2 rounded-full bg-green-400 animate-pulse" title="Live"></div>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <!-- Date Range Picker -->
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-400">Date Range:</label>
+                    <input type="date" id="date-start" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300">
+                    <span class="text-slate-600">to</span>
+                    <input type="date" id="date-end" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300">
+                </div>
+                
+                <!-- Platform Selector -->
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-400">Platform:</label>
+                    <select id="platform-selector" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300">
+                        <option value="all">All</option>
+                        <option value="polymarket">Polymarket</option>
+                        <option value="kalshi">Kalshi</option>
+                        <option value="metaculus">Metaculus</option>
+                    </select>
+                </div>
+                
+                <!-- Category Filter -->
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-400">Category:</label>
+                    <select id="category-filter" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300">
+                        <option value="all">All</option>
+                        <option value="politics">Politics</option>
+                        <option value="crypto">Crypto</option>
+                        <option value="economics">Economics</option>
+                        <option value="science">Science</option>
+                        <option value="sports">Sports</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
+                
+                <!-- Live Data Toggle -->
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <span class="text-xs text-slate-400">Live Data:</span>
+                    <input type="checkbox" id="live-toggle" class="toggle" checked>
+                </label>
+            </div>
+        </header>
+        
+        <!-- Main Layout -->
+        <div class="flex flex-1 overflow-hidden">
+            <!-- Left Sidebar Navigation -->
+            <aside id="sidebar" class="w-64 bg-slate-900 border-r border-slate-800 overflow-y-auto">
+                <nav class="p-4">
+                    <ul class="space-y-2">
+                        <li>
+                            <button class="nav-item active" data-module="calibration">
+                                <span class="nav-number">01</span>
+                                <span class="nav-text">Market Calibration</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button class="nav-item" data-module="crowd-wisdom">
+                                <span class="nav-number">02</span>
+                                <span class="nav-text">Crowd vs Experts</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button class="nav-item" data-module="price-discovery">
+                                <span class="nav-number">03</span>
+                                <span class="nav-text">Price Discovery</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button class="nav-item" data-module="arbitrage">
+                                <span class="nav-number">04</span>
+                                <span class="nav-text">Arbitrage Network</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button class="nav-item" data-module="sentiment">
+                                <span class="nav-number">05</span>
+                                <span class="nav-text">Sentiment Analysis</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button class="nav-item" data-module="liquidity">
+                                <span class="nav-number">06</span>
+                                <span class="nav-text">Liquidity Heatmap</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button class="nav-item" data-module="leaderboard">
+                                <span class="nav-number">07</span>
+                                <span class="nav-text">Forecaster Leaderboard</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button class="nav-item" data-module="whales">
+                                <span class="nav-number">08</span>
+                                <span class="nav-text">Whale Detection</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button class="nav-item" data-module="tail-risk">
+                                <span class="nav-number">09</span>
+                                <span class="nav-text">Tail Risk Analysis</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button class="nav-item" data-module="temporal">
+                                <span class="nav-number">10</span>
+                                <span class="nav-text">Temporal Decay</span>
+                            </button>
+                        </li>
+                    </ul>
+                </nav>
+            </aside>
+            
+            <!-- Main Content Area -->
+            <main id="main-content" class="flex-1 overflow-y-auto bg-slate-950">
+                <div id="module-container" class="p-6">
+                    <!-- Module content will be injected here -->
+                    <div class="flex items-center justify-center h-full">
+                        <div class="text-center">
+                            <div class="loader"></div>
+                            <p class="mt-4 text-slate-400">Loading module...</p>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+        
+        <!-- Bottom Status Bar -->
+        <footer id="status-bar" class="bg-slate-900 border-t border-slate-800 px-6 py-2 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-6">
+                <div class="flex items-center gap-2">
+                    <span class="text-slate-500">Last Updated:</span>
+                    <span id="last-updated" class="text-cyan-400 font-mono">--:--:--</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-slate-500">Markets Loaded:</span>
+                    <span id="markets-loaded" class="text-amber-400 font-mono">0</span>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <span class="text-slate-500">Polymarket:</span>
+                    <div class="status-indicator" id="status-polymarket"></div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-slate-500">Kalshi:</span>
+                    <div class="status-indicator" id="status-kalshi"></div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-slate-500">Metaculus:</span>
+                    <div class="status-indicator" id="status-metaculus"></div>
+                </div>
+            </div>
+        </footer>
+    </div>
+    
+    <script type="module" src="./main.js"></script>
+</body>
+</html>
