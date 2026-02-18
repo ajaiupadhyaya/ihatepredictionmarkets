@@ -1,6 +1,7 @@
 // Enhanced Home Module with AI Dashboard and 3D Visualizations
 import { AIDashboard } from '../../utils/aiDashboard.js';
 import { ThreeVisualizer } from '../../utils/threeVisualizations.js';
+import { exportManager, reportGenerator } from '../../utils/exportManager.js';
 import { getModuleData } from '../../data/dataManager.js';
 import * as d3 from 'd3';
 
@@ -21,6 +22,35 @@ export default class HomeModule {
             // Build layout
             this.container.innerHTML = `
                 <div class="home-module fade-in">
+                    <!-- Action Bar -->
+                    <div class="action-bar">
+                        <button id="generate-report-btn" class="action-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                            </svg>
+                            Generate Report
+                        </button>
+                        
+                        <button id="export-data-btn" class="action-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Export Data
+                        </button>
+                        
+                        <button id="refresh-data-btn" class="action-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 4 23 10 17 10"/>
+                                <polyline points="1 20 1 14 7 14"/>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                            </svg>
+                            Refresh
+                        </button>
+                    </div>
+
                     <!-- Hero Section -->
                     <div class="hero-section">
                         <div class="hero-content">
@@ -148,6 +178,125 @@ export default class HomeModule {
 
         // Setup featured tabs
         this.setupFeaturedTabs();
+
+        // Setup action buttons
+        this.setupActionButtons();
+    }
+
+    setupActionButtons() {
+        // Generate Report button
+        const reportBtn = document.getElementById('generate-report-btn');
+        if (reportBtn) {
+            reportBtn.addEventListener('click', () => {
+                const insights = this.aiDashboard?.summary || {};
+                const html = reportGenerator.generateMarketReport(this.data, insights);
+                reportGenerator.downloadReport(html, `market-report-${Date.now()}.html`);
+                
+                exportManager.showToast('Report generated successfully!', 'success');
+            });
+        }
+
+        // Export Data button
+        const exportBtn = document.getElementById('export-data-btn');
+        if (exportBtn) {
+            exportBtn.addEventListener('click', () => {
+                const menu = document.createElement('div');
+                menu.className = 'export-menu';
+                menu.innerHTML = `
+                    <div class="export-menu-item" data-format="json">Export as JSON</div>
+                    <div class="export-menu-item" data-format="csv">Export as CSV</div>
+                `;
+                
+                menu.style.cssText = `
+                    position: absolute;
+                    background: var(--color-bg-secondary);
+                    border: 1px solid var(--color-border);
+                    border-radius: 8px;
+                    padding: 8px;
+                    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                    z-index: 1000;
+                    top: 60px;
+                    right: 120px;
+                `;
+
+                menu.querySelectorAll('.export-menu-item').forEach(item => {
+                    item.style.cssText = `
+                        padding: 12px 16px;
+                        cursor: pointer;
+                        border-radius: 4px;
+                        transition: all 0.2s ease;
+                    `;
+                    
+                    item.addEventListener('mouseover', () => {
+                        item.style.background = 'var(--color-bg-tertiary)';
+                    });
+                    
+                    item.addEventListener('mouseout', () => {
+                        item.style.background = 'transparent';
+                    });
+                    
+                    item.addEventListener('click', () => {
+                        const format = item.dataset.format;
+                        if (format === 'json') {
+                            exportManager.exportJSON(this.data, 'market-data.json');
+                        } else if (format === 'csv') {
+                            exportManager.exportCSV(this.data.markets, 'markets.csv');
+                        }
+                        document.body.removeChild(menu);
+                    });
+                });
+
+                document.body.appendChild(menu);
+
+                // Close menu on outside click
+                setTimeout(() => {
+                    document.addEventListener('click', function closeMenu(e) {
+                        if (!menu.contains(e.target) && e.target !== exportBtn) {
+                            if (menu.parentElement) {
+                                document.body.removeChild(menu);
+                            }
+                            document.removeEventListener('click', closeMenu);
+                        }
+                    });
+                }, 100);
+            });
+        }
+
+        // Refresh button
+        const refreshBtn = document.getElementById('refresh-data-btn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', async () => {
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '<span class="spinner"></span> Refreshing...';
+                
+                try {
+                    // Re-fetch data
+                    this.data = await getModuleData('all');
+                    
+                    // Re-render AI dashboard
+                    if (this.aiDashboard) {
+                        await this.aiDashboard.render(this.data);
+                    }
+                    
+                    // Update stats
+                    this.renderQuickStats();
+                    
+                    exportManager.showToast('Data refreshed successfully!', 'success');
+                } catch (error) {
+                    exportManager.showToast('Failed to refresh data', 'error');
+                }
+                
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = `
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <polyline points="1 20 1 14 7 14"/>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                    </svg>
+                    Refresh
+                `;
+            });
+        }
     }
 
     create3DNetworkPreview() {
@@ -422,6 +571,65 @@ export default class HomeModule {
         style.textContent = `
             .home-module {
                 padding: 0;
+            }
+
+            .action-bar {
+                display: flex;
+                gap: 12px;
+                margin-bottom: 24px;
+                justify-content: flex-end;
+            }
+
+            .action-btn {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 10px 20px;
+                background: var(--color-bg-secondary);
+                border: 1px solid var(--color-border);
+                border-radius: 8px;
+                color: var(--color-text-primary);
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 500;
+                transition: all 0.2s ease;
+            }
+
+            .action-btn:hover {
+                background: var(--color-bg-tertiary);
+                border-color: var(--color-accent-cyan);
+                color: var(--color-accent-cyan);
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(34, 211, 238, 0.2);
+            }
+
+            .action-btn:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+
+            .action-btn svg {
+                width: 20px;
+                height: 20px;
+            }
+
+            .spinner {
+                display: inline-block;
+                width: 16px;
+                height: 16px;
+                border: 2px solid var(--color-border);
+                border-top-color: var(--color-accent-cyan);
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+            }
+
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+
+            .export-menu-item {
+                color: var(--color-text-primary);
+                font-size: 14px;
             }
 
             .hero-section {
