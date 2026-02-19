@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "node server.js",
+    "dev-full": "npm run server & npm run dev",
     "build": "vite build",
     "preview": "vite preview"
   },
@@ -14,7 +16,9 @@
     "arquero": "^5.2.0",
     "chart.js": "^4.5.1",
     "chartjs-plugin-annotation": "^3.1.0",
+    "cors": "^2.8.6",
     "d3": "^7.8.5",
+    "express": "^5.2.1",
     "gsap": "^3.14.2",
     "html2canvas": "^1.4.1",
     "katex": "^0.16.9",

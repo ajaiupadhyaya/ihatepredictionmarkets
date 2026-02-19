@@ -1,22 +1,20 @@
 // Polymarket API Integration
 // Public API endpoints for fetching market data
+// Now proxied through backend server (server.js)
 
-const POLYMARKET_API = 'https://gamma-api.polymarket.com';
-const CLOB_API = 'https://clob.polymarket.com';
-const FETCH_TIMEOUT = 10000; // 10 second timeout
+const FETCH_TIMEOUT = 15000; // 15 second timeout
 
 /**
- * Fetch markets from Polymarket
+ * Fetch markets from Polymarket (via backend proxy)
  */
 export async function fetchMarkets() {
     try {
-        console.log('Polymarket: Fetching from', CLOB_API);
+        console.log('Polymarket: Fetching from backend proxy...');
         
-        // Create abort controller for timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
         
-        const response = await fetch(`${CLOB_API}/markets`, {
+        const response = await fetch('http://localhost:3001/api/polymarket', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
@@ -30,9 +28,14 @@ export async function fetchMarkets() {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        const data = await response.json();
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Proxy request failed');
+        }
         
         // Handle both array and object responses
+        const data = result.data;
         const markets = Array.isArray(data) ? data : (data.markets || data.data || []);
         console.log(`Polymarket: Got ${markets.length} markets`);
         

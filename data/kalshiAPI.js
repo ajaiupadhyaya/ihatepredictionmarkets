@@ -1,25 +1,20 @@
 // Kalshi API Integration
 // Public API endpoints for fetching market data
+// Now proxied through backend server (server.js)
 
-const KALSHI_API = 'https://api.elections.kalshi.com/trade-api/v2';
-const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
-const FETCH_TIMEOUT = 10000; // 10 second timeout
+const FETCH_TIMEOUT = 15000; // 15 second timeout
 
 /**
- * Fetch markets from Kalshi
+ * Fetch markets from Kalshi (via backend proxy)
  */
 export async function fetchMarkets() {
     try {
-        console.log('Kalshi: Fetching from', KALSHI_API);
+        console.log('Kalshi: Fetching from backend proxy...');
         
-        // Create abort controller for timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
         
-        const endpoint = `${KALSHI_API}/markets`;
-        const corsUrl = `${CORS_PROXY}${encodeURIComponent(endpoint)}`;
-        
-        const response = await fetch(corsUrl, {
+        const response = await fetch('http://localhost:3001/api/kalshi', {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
@@ -33,13 +28,13 @@ export async function fetchMarkets() {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        let data = await response.json();
+        const result = await response.json();
         
-        // If response is wrapped (as string from CORS proxy), parse it
-        if (typeof data === 'string') {
-            data = JSON.parse(data);
+        if (!result.success) {
+            throw new Error(result.error || 'Proxy request failed');
         }
         
+        const data = result.data;
         console.log(`Kalshi: Got ${data.markets?.length || 0} markets`);
         
         // Transform to our format
