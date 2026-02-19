@@ -50,8 +50,17 @@ export async function initializeData() {
             await loadSyntheticData();
         }
     } catch (error) {
-        console.warn('Failed to load live data, falling back to synthetic:', error);
-        await loadSyntheticData();
+        if (state.useLiveData && state.strictRealData) {
+            console.error('Failed to load live data in strict mode:', error);
+            state.markets = [];
+            state.forecasters = [];
+            state.apiStatus.polymarket = 'offline';
+            state.apiStatus.kalshi = 'offline';
+            state.apiStatus.metaculus = 'offline';
+        } else {
+            console.warn('Failed to load live data, falling back to synthetic:', error);
+            await loadSyntheticData();
+        }
     }
     
     state.lastUpdate = new Date();
@@ -62,6 +71,7 @@ export async function initializeData() {
  * Load live data from APIs
  */
 async function loadLiveData() {
+    const strictMode = state.strictRealData;
     const promises = [];
     
     // Try fetching from each platform
@@ -72,7 +82,7 @@ async function loadLiveData() {
                 return data;
             })
             .catch(err => {
-                state.apiStatus.polymarket = 'synthetic';
+                state.apiStatus.polymarket = strictMode ? 'offline' : 'synthetic';
                 return [];
             })
     );
@@ -84,7 +94,7 @@ async function loadLiveData() {
                 return data;
             })
             .catch(err => {
-                state.apiStatus.kalshi = 'synthetic';
+                state.apiStatus.kalshi = strictMode ? 'offline' : 'synthetic';
                 return [];
             })
     );
@@ -96,22 +106,16 @@ async function loadLiveData() {
                 return data;
             })
             .catch(err => {
-                state.apiStatus.metaculus = 'synthetic';
+                state.apiStatus.metaculus = strictMode ? 'offline' : 'synthetic';
                 return [];
             })
     );
     
     const results = await Promise.all(promises);
     const allMarkets = results.flat();
-    
-    // If we got very few markets, supplement with synthetic
-    if (allMarkets.length < 50) {
-        console.log('Insufficient live data, supplementing with synthetic');
-        const synthetic = syntheticData.generateResolvedMarkets(300);
-        state.markets = [...allMarkets, ...synthetic];
-    } else {
-        state.markets = allMarkets;
-    }
+
+    state.markets = allMarkets;
+    state.forecasters = [];
 }
 
 /**
@@ -218,6 +222,10 @@ async function getCalibrationData() {
 }
 
 async function getCrowdWisdomData() {
+    if (state.useLiveData && state.strictRealData) {
+        return { events: [] };
+    }
+
     const resolvedMarkets = state.markets.filter(m => m.resolved).slice(0, 20);
     
     // Generate expert forecasts (synthetic)
@@ -238,6 +246,10 @@ async function getCrowdWisdomData() {
 }
 
 async function getPriceDiscoveryData() {
+    if (state.useLiveData && state.strictRealData) {
+        return { market: null, trades: [] };
+    }
+
     const markets = state.markets.filter(m => m.priceHistory && m.priceHistory.length > 100);
     const selectedMarket = markets[Math.floor(Math.random () * markets.length)];
     
@@ -255,6 +267,10 @@ async function getPriceDiscoveryData() {
 }
 
 async function getArbitrageData() {
+    if (state.useLiveData && state.strictRealData) {
+        return { markets: [], opportunities: [] };
+    }
+
     const correlatedMarkets = syntheticData.generateCorrelatedMarkets(state.markets.slice(0, 50));
     const opportunities = syntheticData.generateArbitrageOpportunities(correlatedMarkets);
     
@@ -265,14 +281,24 @@ async function getArbitrageData() {
 }
 
 async function getSentimentData() {
-    const markets = state.markets.filter(m => m.priceHistory).slice(0, 10);
-    
-    const marketsWithSentiment = markets.map(market => ({
-        ...market,
-        sentiment: syntheticData.generateSentimentData(market)
-    }));
-    
-    return { markets: marketsWithSentiment };
+    if (state.useLiveData && state.strictRealData) {
+        return { timeseries: [] };
+    }
+
+    const market = state.markets.find(m => m.priceHistory && m.priceHistory.length > 0);
+    if (!market) {
+        return { timeseries: [] };
+    }
+
+    const sentimentHistory = syntheticData.generateSentimentData(market);
+    const timeseries = sentimentHistory.map((point, idx) => ({
+        timestamp: point.timestamp,
+        sentiment: point.sentiment,
+        probability: market.priceHistory[idx]?.price ?? null,
+        mentions: point.volume
+    })).filter(point => point.probability !== null);
+
+    return { timeseries, market };
 }
 
 async function getLiquidityData() {
@@ -283,6 +309,13 @@ async function getLiquidityData() {
 }
 
 async function getLeaderboardData() {
+    if (state.useLiveData && state.strictRealData) {
+        return {
+            forecasters: [],
+            markets: state.markets.filter(m => m.resolved)
+        };
+    }
+
     return {
         forecasters: state.forecasters || [],
         markets: state.markets.filter(m => m.resolved)
@@ -290,6 +323,10 @@ async function getLeaderboardData() {
 }
 
 async function getWhalesData() {
+    if (state.useLiveData && state.strictRealData) {
+        return { trades: null, whales: [], market: null };
+    }
+
     const market = state.markets.find(m => m.priceHistory && m.priceHistory.length > 100);
     
     if (!market) {
@@ -314,8 +351,8 @@ async function getTailRiskData() {
 
 async function getTemporalData() {
     const markets = state.markets.filter(m => m.priceHistory && m.priceHistory.length > 50);
-    
-    return { markets };
+
+    return { markets: markets.length > 0 ? markets : null };
 }
 
 function updateMarketsLoaded() {

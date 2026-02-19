@@ -360,6 +360,11 @@ export default class TemporalModule {
                 n: bin.length
             };
         }).filter(d => d !== null);
+
+        if (pathData.length === 0) {
+            container.html('<div class="text-slate-400 p-4">Insufficient data to render mean path chart</div>');
+            return;
+        }
         
         // Scales
         const x = d3.scaleLinear()
@@ -499,6 +504,11 @@ export default class TemporalModule {
                 volatility: stats.standardDeviation(bin) * Math.sqrt(252) // Annualize
             };
         }).filter(d => d !== null);
+
+        if (volData.length === 0) {
+            container.html('<div class="text-slate-400 p-4">Insufficient data to render volatility chart</div>');
+            return;
+        }
         
         // Scales
         const x = d3.scaleLinear()
@@ -591,9 +601,24 @@ export default class TemporalModule {
                 allReturns.push(ret);
             }
         });
+
+        if (allPrices.length === 0) {
+            const statsPanel = document.getElementById('stats-panel');
+            statsPanel.appendChild(ui.createStatsGrid({
+                'Markets Analyzed': markets.length,
+                'Total Observations': 0,
+                'Mean Probability': 'N/A',
+                'Annualized Volatility': 'N/A',
+                'Drift (annualized)': 'N/A',
+                'ACF(1)': 'N/A',
+                'Half-Life (periods)': 'N/A',
+                'Martingale Test': 'N/A'
+            }));
+            return;
+        }
         
         const avgPrice = stats.mean(allPrices);
-        const avgReturn = stats.mean(allReturns);
+        const avgReturn = allReturns.length > 0 ? stats.mean(allReturns) : 0;
         const volatility = allReturns.length > 0 ? stats.standardDeviation(allReturns) * Math.sqrt(252) : 0;
         
         // Mean reversion test

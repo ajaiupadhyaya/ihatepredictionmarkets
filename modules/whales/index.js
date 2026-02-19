@@ -591,7 +591,10 @@ export default class WhalesModule {
         
         const logSizes = trades.map(t => Math.log(t.size)).filter(x => isFinite(x));
         const logImpacts = trades.map(t => Math.log(Math.abs(t.priceImpact))).filter(x => isFinite(x));
-        const impactExponent = logSizes.length > 0 && logImpacts.length > 0 && logSizes.length === logImpacts.length ? stats.pearsonCorrelation(logSizes, logImpacts) * stats.standardDeviation(logImpacts) / stats.standardDeviation(logSizes) : 0;
+        const sizeStd = logSizes.length > 1 ? stats.standardDeviation(logSizes) : 0;
+        const impactStd = logImpacts.length > 1 ? stats.standardDeviation(logImpacts) : 0;
+        const impactExponent = logSizes.length > 1 && logImpacts.length > 1 && logSizes.length === logImpacts.length && sizeStd > 0 ?
+            stats.pearsonCorrelation(logSizes, logImpacts) * impactStd / sizeStd : 0;
         
         const statsData = {
             'Total Whales': whales.length,

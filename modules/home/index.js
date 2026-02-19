@@ -1,4 +1,4 @@
-// Enhanced Home Module with AI Dashboard and 3D Visualizations
+// Home Module with Editorial Overview and 3D Visualizations
 import { AIDashboard } from '../../utils/aiDashboard.js';
 import { ThreeVisualizer } from '../../utils/threeVisualizations.js';
 import { exportManager, reportGenerator } from '../../utils/exportManager.js';
@@ -56,11 +56,11 @@ export default class HomeModule {
                         <div class="hero-content">
                             <h1 class="hero-title">
                                 <span class="gradient-text">Prediction Markets</span>
-                                <span class="hero-subtitle">Quantitative Analysis Terminal</span>
+                                <span class="hero-subtitle">Research Atlas</span>
                             </h1>
                             <p class="hero-description">
-                                Advanced statistical analysis, AI-powered insights, and professional-grade 
-                                visualizations for prediction market traders and researchers.
+                                Statistical diagnostics, market structure analysis, and transparent visual
+                                storytelling for prediction-market research.
                             </p>
                         </div>
                         
@@ -68,7 +68,7 @@ export default class HomeModule {
                         <div id="hero-visualization" class="hero-viz"></div>
                     </div>
 
-                    <!-- AI Dashboard -->
+                    <!-- Analysis Overview -->
                     <div id="ai-dashboard-container" class="ai-dashboard-container"></div>
 
                     <!-- Quick Stats Grid -->
@@ -157,11 +157,15 @@ export default class HomeModule {
     }
 
     async initializeComponents() {
-        // Initialize AI Dashboard
+        // Initialize analysis panel
         const aiContainer = document.getElementById('ai-dashboard-container');
         if (aiContainer) {
-            this.aiDashboard = new AIDashboard(aiContainer);
-            await this.aiDashboard.render(this.data);
+            if (this.state.strictRealData) {
+                this.renderEvidencePanel(aiContainer);
+            } else {
+                this.aiDashboard = new AIDashboard(aiContainer);
+                await this.aiDashboard.render(this.data);
+            }
         }
 
         // Initialize 3D Hero Visualization
@@ -273,8 +277,13 @@ export default class HomeModule {
                     // Re-fetch data
                     this.data = await getModuleData('all');
                     
-                    // Re-render AI dashboard
-                    if (this.aiDashboard) {
+                    // Re-render analysis panel
+                    if (this.state.strictRealData) {
+                        const aiContainer = document.getElementById('ai-dashboard-container');
+                        if (aiContainer) {
+                            this.renderEvidencePanel(aiContainer);
+                        }
+                    } else if (this.aiDashboard) {
                         await this.aiDashboard.render(this.data);
                     }
                     
@@ -297,6 +306,90 @@ export default class HomeModule {
                 `;
             });
         }
+    }
+
+    renderEvidencePanel(container) {
+        const markets = this.data?.markets || [];
+        const resolved = markets.filter(m => m.resolved);
+        const active = markets.filter(m => !m.resolved);
+        const totalVolume = markets.reduce((sum, market) => sum + (market.volume || 0), 0);
+        const avgProbability = markets.length > 0
+            ? markets.reduce((sum, market) => sum + (market.currentProbability ?? market.finalProbability ?? 0), 0) / markets.length
+            : 0;
+
+        // Try to get evaluation metrics if available
+        let evaluationMetrics = null;
+        if (this.state.evaluator && this.state.evaluator.finalArtifacts) {
+            evaluationMetrics = this.state.evaluator.finalArtifacts.pipeline?.report?.testMetrics;
+        }
+
+        let evaluationHtml = '';
+        if (evaluationMetrics && evaluationMetrics.brierScore !== undefined) {
+            evaluationHtml = `
+                <div class="mt-6 pt-6 border-t border-slate-300">
+                    <div class="font-semibold text-slate-700 mb-3">Model Performance (Test Set)</div>
+                    <div class="grid grid-cols-2 gap-3 text-sm">
+                        <div class="bg-slate-50 p-3 rounded-sm">
+                            <div class="text-slate-600">Brier Score</div>
+                            <div class="font-mono font-bold text-slate-900">${evaluationMetrics.brierScore?.toFixed(4) || '—'}</div>
+                        </div>
+                        <div class="bg-slate-50 p-3 rounded-sm">
+                            <div class="text-slate-600">Log Score</div>
+                            <div class="font-mono font-bold text-slate-900">${evaluationMetrics.logScore?.toFixed(4) || '—'}</div>
+                        </div>
+                        <div class="bg-slate-50 p-3 rounded-sm">
+                            <div class="text-slate-600">Calibration (ECE)</div>
+                            <div class="font-mono font-bold text-slate-900">${evaluationMetrics.ece?.toFixed(4) || '—'}</div>
+                        </div>
+                        <div class="bg-slate-50 p-3 rounded-sm">
+                            <div class="text-slate-600">Spherical Score</div>
+                            <div class="font-mono font-bold text-slate-900">${evaluationMetrics.sphericalScore?.toFixed(4) || '—'}</div>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-xs text-slate-500">
+                        Metrics computed on held-out test set using deterministic train/validation/test split (seed=42).
+                        K-fold cross-validation and rolling-window backtest available in evaluation artifacts.
+                    </div>
+                </div>
+            `;
+        }
+
+        container.innerHTML = `
+            <div class="card p-6 mb-6">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Research Evidence Panel</div>
+                        <div class="card-subtitle">Strict real-data mode — synthetic fallbacks disabled</div>
+                    </div>
+                    <div class="text-xs text-slate-500">Updated ${new Date().toLocaleTimeString()}</div>
+                </div>
+                <div class="stats-grid mt-4">
+                    <div class="stat-card">
+                        <div class="stat-label">Markets</div>
+                        <div class="stat-value">${markets.length}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Resolved</div>
+                        <div class="stat-value">${resolved.length}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Active</div>
+                        <div class="stat-value">${active.length}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total Volume</div>
+                        <div class="stat-value">$${(totalVolume / 1e6).toFixed(2)}M</div>
+                    </div>
+                </div>
+                <div class="mt-4 text-sm text-slate-500" style="line-height: 1.6;">
+                    Current analytic mode prioritizes representational integrity: every chart is derived from available source data.
+                    If a required signal is unavailable, the related module shows a no-data state rather than inventing values.
+                    ${evaluationMetrics ? 'Evaluation framework is active with deterministic dataset splits, cross-validation, and formal model scoring.' : 'Evaluation framework will activate once market data is loaded.'}
+                </div>
+                <div class="mt-2 text-sm text-slate-500">Average probability across loaded markets: ${(avgProbability * 100).toFixed(1)}%</div>
+                ${evaluationHtml}
+            </div>
+        `;
     }
 
     create3DNetworkPreview() {

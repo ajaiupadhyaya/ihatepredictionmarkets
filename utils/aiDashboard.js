@@ -1,5 +1,5 @@
-// AI Dashboard Component
-// Provides intelligent market overview with automated insights and recommendations
+// Analysis Dashboard Component
+// Provides market overview with automated insights and recommendations
 
 import { aiAnalyzer } from './aiAnalyzer.js';
 import * as d3 from 'd3';
@@ -11,11 +11,11 @@ export class AIDashboard {
     }
 
     /**
-     * Render AI-powered dashboard
+    * Render automated analysis dashboard
      * @param {Object} data - Market data
      */
     async render(data) {
-        // Generate AI summary
+        // Generate analysis summary
         this.summary = aiAnalyzer.generateMarketSummary(data);
 
         // Build dashboard HTML
@@ -30,7 +30,7 @@ export class AIDashboard {
                                     <path d="M12 2L2 7l10 5 10-5-10-5z"/>
                                     <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
                                 </svg>
-                                <span>AI Analysis</span>
+                                <span>Quant Analysis</span>
                             </div>
                             <h3>Market Overview</h3>
                         </div>

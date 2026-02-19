@@ -17,7 +17,8 @@ export const state = {
     },
     
     // Settings
-    useLiveData: false, // Changed to false - use synthetic data
+    useLiveData: true,
+    strictRealData: true,
     
     // API Status
     apiStatus: {

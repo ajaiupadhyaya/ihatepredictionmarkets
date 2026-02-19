@@ -125,6 +125,11 @@ export default class LiquidityModule {
                 }
             });
         });
+
+        if (heatmapData.length === 0) {
+            container.html('<div class="text-slate-400 p-4">Insufficient data to render heatmap</div>');
+            return;
+        }
         
         // Scales
         const x = d3.scaleBand()
@@ -424,6 +429,11 @@ export default class LiquidityModule {
                 count: markets.length
             };
         }).sort((a, b) => a.avgKyleLambda - b.avgKyleLambda);
+
+        if (impactData.length === 0) {
+            container.html('<div class="text-slate-400 p-4">Insufficient data to render impact chart</div>');
+            return;
+        }
         
         // Scales
         const x = d3.scaleBand()
@@ -522,6 +532,21 @@ export default class LiquidityModule {
     
     renderStats() {
         const markets = this.data.markets;
+
+        if (!markets || markets.length === 0) {
+            const statsPanel = document.getElementById('stats-panel');
+            statsPanel.appendChild(ui.createStatsGrid({
+                'Total Markets': 0,
+                'Total Volume': 'N/A',
+                'Avg Volume': 'N/A',
+                'Median Volume': 'N/A',
+                'Gini Coefficient': 'N/A',
+                'Top 10% Share': 'N/A',
+                'Avg Liquidity Score': 'N/A',
+                'Liquid Markets (>0.7)': 0
+            }));
+            return;
+        }
         const volumes = markets.map(m => m.volume || 0);
         const liquidities = markets.map(m => m.liquidity || 0.5);
         
@@ -533,7 +558,7 @@ export default class LiquidityModule {
         
         const avgLiquidity = stats.mean(liquidities);
         const top10Volume = d3.sum(volumes.sort((a, b) => b - a).slice(0, Math.floor(markets.length * 0.1)));
-        const top10Share = top10Volume / totalVolume;
+        const top10Share = totalVolume > 0 ? top10Volume / totalVolume : 0;
         
         const statsData = {
             'Total Markets': markets.length,

@@ -523,6 +523,21 @@ export default class CrowdWisdomModule {
     renderStats() {
         // Calculate statistics
         const allEvents = this.data.events.filter(e => e.outcome !== null);
+
+        if (allEvents.length < 2) {
+            const statsPanel = document.getElementById('stats-panel');
+            statsPanel.appendChild(ui.createStatsGrid({
+                'Market-Expert Correlation': 'N/A',
+                'Market RMSE': 'N/A',
+                'Expert RMSE': 'N/A',
+                'Market Brier Score': 'N/A',
+                'Expert Brier Score': 'N/A',
+                'Winner': 'N/A',
+                'Events Analyzed': allEvents.length,
+                'Avg Divergence': 'N/A'
+            }));
+            return;
+        }
         
         // Correlation between market and expert
         const marketFinals = allEvents.map(e => e.marketProbabilities[e.marketProbabilities.length - 1].price);

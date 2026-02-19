@@ -129,6 +129,10 @@ export function formatCurrency(num) {
     return `$${formatLargeNumber(num)}`;
 }
 
+export function formatDollar(num) {
+    return formatCurrency(num);
+}
+
 /**
  * Format date
  */

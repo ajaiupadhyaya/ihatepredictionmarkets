@@ -483,6 +483,21 @@ export default class SentimentModule {
     renderStats() {
         const sentiments = this.data.timeseries.map(d => d.sentiment);
         const probabilities = this.data.timeseries.map(d => d.probability);
+
+        if (sentiments.length < 2 || probabilities.length < 2 || sentiments.length !== probabilities.length) {
+            const statsPanel = document.getElementById('stats-panel');
+            statsPanel.appendChild(ui.createStatsGrid({
+                'Observations': this.data.timeseries.length,
+                'Correlation': 'N/A',
+                'Predictive Corr': 'N/A',
+                'Avg Sentiment': 'N/A',
+                'Sentiment Std Dev': 'N/A',
+                'Granger p-value': 'N/A',
+                'Sentiment → Price': 'N/A',
+                'Max Cross-Corr': 'N/A'
+            }));
+            return;
+        }
         
         // Compute statistics
         const correlation = stats.pearsonCorrelation(sentiments, probabilities);
@@ -492,7 +507,8 @@ export default class SentimentModule {
         // Price changes
         const priceChanges = probabilities.slice(1).map((p, i) => p - probabilities[i]);
         const sentimentAtT = sentiments.slice(0, -1);
-        const predictiveCorr = stats.pearsonCorrelation(sentimentAtT, priceChanges);
+        const predictiveCorr = sentimentAtT.length > 1 && sentimentAtT.length === priceChanges.length ?
+            stats.pearsonCorrelation(sentimentAtT, priceChanges) : 0;
         
         // Granger causality
         const grangerResult = stats.grangerCausality(sentiments, probabilities, 3);

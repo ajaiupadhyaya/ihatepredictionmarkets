@@ -180,6 +180,11 @@ export default class LeaderboardModule {
         
         const chartWidth = width - margin.left - margin.right;
         const chartHeight = height - margin.top - margin.bottom;
+
+        if (!this.data.forecasters || this.data.forecasters.length === 0) {
+            container.html('<div class="text-slate-400 p-4">Insufficient data to render distribution chart</div>');
+            return;
+        }
         
         // Metrics to show
         const metrics = [
@@ -282,6 +287,11 @@ export default class LeaderboardModule {
         
         const chartWidth = width - margin.left - margin.right;
         const chartHeight = height - margin.top - margin.bottom;
+
+        if (!this.data.forecasters || this.data.forecasters.length === 0) {
+            container.html('<div class="text-slate-400 p-4">Insufficient data to render skill-luck chart</div>');
+            return;
+        }
         
         // Calculate skill vs luck
         // Skill = average score, Luck = variance in scores
@@ -446,6 +456,21 @@ export default class LeaderboardModule {
     
     renderStats() {
         const forecasters = this.data.forecasters;
+
+        if (!forecasters || forecasters.length === 0) {
+            const statsPanel = document.getElementById('stats-panel');
+            statsPanel.appendChild(ui.createStatsGrid({
+                'Total Forecasters': 0,
+                'Avg Brier Score': 'N/A',
+                'Median Brier': 'N/A',
+                'Best Brier': 'N/A',
+                'Avg Log Score': 'N/A',
+                'Total Predictions': 0,
+                'Avg Predictions per User': 'N/A',
+                'Top 10% Brier': 'N/A'
+            }));
+            return;
+        }
         
         // Calculate aggregate statistics
         const brierScores = forecasters.map(f => f.brierScore);

@@ -24,6 +24,115 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
+body {
+    background: #f4f1ea;
+    color: #1c1c1c;
+}
+
+#top-bar,
+#sidebar,
+#status-bar,
+#main-content {
+    background: #f4f1ea !important;
+    border-color: #d7d1c7 !important;
+}
+
+#main-content {
+    background: #f8f6f1 !important;
+}
+
+.text-cyan-400,
+.text-amber-400 {
+    color: #1c1c1c !important;
+}
+
+.text-slate-400,
+.text-slate-500,
+.text-slate-300,
+.text-slate-200 {
+    color: #5e584f !important;
+}
+
+.nav-item {
+    border-radius: 2px;
+    border: 1px solid transparent;
+    color: #4f4a42;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.nav-item:hover {
+    background: #ece8df;
+    border-color: #cfc8bb;
+    color: #141414;
+}
+
+.nav-item.active {
+    background: #111111;
+    border-color: #111111;
+    color: #f4f1ea;
+}
+
+.nav-item.active .nav-number {
+    color: #f4f1ea;
+}
+
+.card,
+.methodology,
+.stat-card,
+.stat-card-modern,
+.dashboard-section {
+    background: #fbf9f4 !important;
+    border: 1px solid #d9d2c6 !important;
+    border-radius: 2px !important;
+    box-shadow: none !important;
+}
+
+.card:hover {
+    border-color: #bfb7a8 !important;
+    box-shadow: none !important;
+}
+
+.chart-container,
+.formula-block,
+.tooltip {
+    background: #f1ede5 !important;
+    border: 1px solid #d7d0c3 !important;
+    color: #1c1c1c !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+}
+
+.tooltip-title,
+.card-title,
+.methodology-title,
+.stat-value {
+    color: #1a1a1a !important;
+}
+
+.metric-card,
+.insight-card,
+.anomaly-item,
+.recommendation-item {
+    background: #f7f4ec !important;
+    border: 1px solid #d9d2c6 !important;
+    border-radius: 2px !important;
+    box-shadow: none !important;
+}
+
+.gradient-text {
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    -webkit-text-fill-color: #121212 !important;
+    color: #121212 !important;
+}
+
+.status-indicator.online,
+.status-indicator.synthetic,
+.status-indicator.offline {
+    box-shadow: none !important;
+}
+
 .font-mono {
     font-family: 'JetBrains Mono', 'Courier New', monospace;
 }
