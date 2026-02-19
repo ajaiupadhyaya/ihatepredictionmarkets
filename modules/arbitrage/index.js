@@ -3,6 +3,7 @@ import * as d3 from 'd3';
 import * as stats from '../../stats/index.js';
 import * as ui from '../../utils/ui.js';
 import { getModuleData } from '../../data/dataManager.js';
+import { ThreeVisualizer } from '../../utils/threeVisualizations.js';
 
 export default class ArbitrageModule {
     constructor(container, state) {

@@ -149,6 +149,10 @@ export async function getModuleData(moduleId) {
     let data;
     
     switch (moduleId) {
+        case 'all':
+        case 'home':
+            data = await getAllData();
+            break;
         case 'calibration':
             data = await getCalibrationData();
             break;
@@ -188,6 +192,19 @@ export async function getModuleData(moduleId) {
 }
 
 // Module-specific data getters
+
+async function getAllData() {
+    return {
+        markets: state.markets,
+        forecasters: state.forecasters || [],
+        categories: [...new Set(state.markets.map(m => m.category))],
+        summary: {
+            total: state.markets.length,
+            resolved: state.markets.filter(m => m.resolved).length,
+            active: state.markets.filter(m => !m.resolved).length
+        }
+    };
+}
 
 async function getCalibrationData() {
     const resolvedMarkets = state.markets.filter(m => m.resolved);
