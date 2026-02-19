@@ -35,10 +35,29 @@ export async function fetchMarkets() {
         }
         
         const data = result.data;
-        console.log(`Kalshi: Got ${data.markets?.length || 0} markets`);
+        const markets = data.markets || [];
+        console.log(`Kalshi: Got ${markets.length} markets`);
         
-        // Transform to our format
-        return (data.markets || []).map(transformKalshiData);
+        if (!Array.isArray(markets) || markets.length === 0) {
+            throw new Error('No markets in Kalshi response');
+        }
+        
+        // Transform to our format with error handling
+        const transformed = [];
+        for (let i = 0; i < markets.length; i++) {
+            try {
+                const market = transformKalshiData(markets[i]);
+                transformed.push(market);
+            } catch (err) {
+                console.warn(`Kalshi: Failed to transform market ${i}:`, err.message);
+            }
+        }
+        
+        console.log(`Kalshi: Successfully transformed ${transformed.length}/${markets.length} markets`);
+        if (transformed.length === 0) {
+            throw new Error('Failed to transform any Kalshi markets');
+        }
+        return transformed;
     } catch (error) {
         console.error('Kalshi API error:', error.message);
         throw error;
@@ -49,20 +68,30 @@ export async function fetchMarkets() {
  * Transform Kalshi data to our internal format
  */
 function transformKalshiData(market) {
+    if (!market || typeof market !== 'object') {
+        throw new Error('Invalid market object');
+    }
+    
+    if (!market.ticker) {
+        throw new Error('Market missing ticker');
+    }
+    
+    const title = market.title || market.subtitle || 'Unknown Market';
+    
     return {
         id: `kalshi_${market.ticker}`,
-        title: market.title || market.subtitle,
+        title: title,
         category: market.category || 'other',
         platform: 'kalshi',
         createdAt: market.open_time || new Date().toISOString(),
         resolvedAt: market.close_time && market.status === 'closed' ? market.close_time : null,
         resolved: market.status === 'closed',
         outcome: market.result ? (market.result === 'yes' ? 1 : 0) : null,
-        currentProbability: market.last_price ? market.last_price / 100 : 0.5,
-        finalProbability: market.status === 'closed' && market.last_price ? market.last_price / 100 : null,
-        volume: market.volume || 0,
-        liquidity: market.open_interest || 0,
-        traders: 0, // Not available in public data
+        currentProbability: market.last_price ? parseFloat(market.last_price) / 100 : 0.5,
+        finalProbability: market.status === 'closed' && market.last_price ? parseFloat(market.last_price) / 100 : null,
+        volume: market.volume ? parseFloat(market.volume) : 0,
+        liquidity: market.open_interest ? parseFloat(market.open_interest) : 0,
+        traders: 0,
         priceHistory: []
     };
 }

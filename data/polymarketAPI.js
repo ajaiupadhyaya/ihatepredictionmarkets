@@ -43,8 +43,22 @@ export async function fetchMarkets() {
             throw new Error('No markets in Polymarket response');
         }
         
-        // Transform to our format
-        return markets.map(transformPolymarketData);
+        // Transform to our format with error handling
+        const transformed = [];
+        for (let i = 0; i < markets.length; i++) {
+            try {
+                const market = transformPolymarketData(markets[i]);
+                transformed.push(market);
+            } catch (err) {
+                console.warn(`Polymarket: Failed to transform market ${i}:`, err.message);
+            }
+        }
+        
+        console.log(`Polymarket: Successfully transformed ${transformed.length}/${markets.length} markets`);
+        if (transformed.length === 0) {
+            throw new Error('Failed to transform any Polymarket markets');
+        }
+        return transformed;
     } catch (error) {
         console.error('Polymarket API error:', error.message);
         throw error;
@@ -55,21 +69,31 @@ export async function fetchMarkets() {
  * Transform Polymarket data to our internal format
  */
 function transformPolymarketData(market) {
+    if (!market || typeof market !== 'object') {
+        throw new Error('Invalid market object');
+    }
+    
+    if (!market.condition_id) {
+        throw new Error('Market missing condition_id');
+    }
+    
+    const question = market.question || market.description || 'Unknown Market';
+    
     return {
         id: `polymarket_${market.condition_id}`,
-        title: market.question ||market.description,
-        category: categorizeMarket(market.question),
+        title: question,
+        category: categorizeMarket(question),
         platform: 'polymarket',
-        createdAt: market.created_at || new Date().toISOString(),
-        resolvedAt: market.closed ? market.end_date : null,
-        resolved: market.closed || false,
+        createdAt: market.created_at || market.open_time || new Date().toISOString(),
+        resolvedAt: market.closed && market.end_date_iso ? market.end_date_iso : null,
+        resolved: market.closed === true,
         outcome: market.outcome ? (market.outcome === 'Yes' ? 1 : 0) : null,
-        currentProbability: parseFloat(market.last_price) || 0.5,
-        finalProbability: market.closed ? parseFloat(market.last_price) : null,
-        volume: parseFloat(market.volume) || 0,
-        liquidity: parseFloat(market.liquidity) || 0,
+        currentProbability: market.last_price ? parseFloat(market.last_price) : 0.5,
+        finalProbability: market.closed && market.last_price ? parseFloat(market.last_price) : null,
+        volume: market.volume ? parseFloat(market.volume) : 0,
+        liquidity: market.liquidity ? parseFloat(market.liquidity) : 0,
         traders: market.participants || 0,
-        priceHistory: [] // Would need separate API call
+        priceHistory: []
     };
 }
 

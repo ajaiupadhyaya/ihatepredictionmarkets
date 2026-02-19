@@ -43,6 +43,8 @@ export async function fetchMarkets() {
             results = data.data || [];
         }
         
+        console.log(`Metaculus: Got ${results.length} total questions`);
+        
         const binaryQuestions = (Array.isArray(results) ? results : [])
             .filter(q => {
                 // More flexible binary question detection
@@ -51,10 +53,28 @@ export async function fetchMarkets() {
                 return false;
             });
         
-        console.log(`Metaculus: Got ${binaryQuestions.length} binary questions (from ${results.length} total)`);
+        console.log(`Metaculus: Filtered to ${binaryQuestions.length} binary questions`);
         
-        // Transform to our format (only binary questions)
-        return binaryQuestions.map(transformMetaculusData);
+        if (binaryQuestions.length === 0) {
+            throw new Error('No binary questions found in Metaculus response');
+        }
+        
+        // Transform to our format with error handling
+        const transformed = [];
+        for (let i = 0; i < binaryQuestions.length; i++) {
+            try {
+                const market = transformMetaculusData(binaryQuestions[i]);
+                transformed.push(market);
+            } catch (err) {
+                console.warn(`Metaculus: Failed to transform question ${i}:`, err.message);
+            }
+        }
+        
+        console.log(`Metaculus: Successfully transformed ${transformed.length}/${binaryQuestions.length} questions`);
+        if (transformed.length === 0) {
+            throw new Error('Failed to transform any Metaculus questions');
+        }
+        return transformed;
         
     } catch (error) {
         console.error('Metaculus API error:', error.message);
@@ -66,8 +86,20 @@ export async function fetchMarkets() {
  * Transform Metaculus data to our internal format
  */
 function transformMetaculusData(question) {
+    if (!question || typeof question !== 'object') {
+        throw new Error('Invalid question object');
+    }
+    
+    if (!question.id) {
+        throw new Error('Question missing id');
+    }
+    
+    if (!question.title) {
+        throw new Error('Question missing title');
+    }
+    
     const communityPrediction = question.community_prediction 
-        ? question.community_prediction.full.q2 
+        ? (question.community_prediction.full?.q2 || 0.5)
         : 0.5;
     
     return {
@@ -75,14 +107,14 @@ function transformMetaculusData(question) {
         title: question.title,
         category: categorizeQuestion(question.title),
         platform: 'metaculus',
-        createdAt: question.created_time,
-        resolvedAt: question.resolve_time,
-        resolved: question.resolution !== null,
+        createdAt: question.created_time || new Date().toISOString(),
+        resolvedAt: question.resolve_time || null,
+        resolved: question.resolution !== null && question.resolution !== undefined,
         outcome: question.resolution === 1 ? 1 : (question.resolution === 0 ? 0 : null),
         currentProbability: communityPrediction,
-        finalProbability: question.resolution !== null ? communityPrediction : null,
+        finalProbability: (question.resolution !== null && question.resolution !== undefined) ? communityPrediction : null,
         volume: question.number_of_predictions || 0,
-        liquidity: 0.8, // Metaculus doesn't have liquidity concept
+        liquidity: 0.8,
         traders: question.number_of_predictors || 0,
         priceHistory: []
     };
