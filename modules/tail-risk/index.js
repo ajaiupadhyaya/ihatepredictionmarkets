@@ -283,6 +283,12 @@ export default class TailRiskModule {
         const height = 400;
         const margin = { top: 20, right: 30, bottom: 50, left: 60 };
         
+        // Defensive check
+        if (!this.data || !this.data.markets || this.data.markets.length === 0) {
+            container.html('<div class="text-center text-slate-400">Insufficient market data</div>');
+            return;
+        }
+        
         // Create SVG
         const svg = container.append('svg')
             .attr('width', width)
@@ -294,9 +300,19 @@ export default class TailRiskModule {
         const chartWidth = width - margin.left - margin.right;
         const chartHeight = height - margin.top - margin.bottom;
         
-        // Fit beta distribution to final probabilities
-        const probabilities = this.data.markets.map(m => m.finalProbability);
-        const betaParams = stats.fitBeta(probabilities);
+        // Fit beta distribution to final probabilities (with fallback)
+        const probabilities = this.data.markets
+            .map(m => m.finalProbability)
+            .filter(p => p !== null && p !== undefined && p >= 0 && p <= 1);
+        
+        let betaParams = { alpha: 1, beta: 1 }; // default uniform
+        try {
+            if (probabilities.length > 1) {
+                betaParams = stats.fitBeta(probabilities);
+            }
+        } catch (err) {
+            console.warn('Beta fitting failed, using default:', err.message);
+        }
         
         // Generate beta PDF
         const pdfData = [];

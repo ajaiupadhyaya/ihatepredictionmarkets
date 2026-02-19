@@ -95,6 +95,12 @@ export default class CalibrationModule {
         const height = 400;
         const margin = { top: 20, right: 30, bottom: 50, left: 60 };
         
+        // Defensive check
+        if (!this.data || !this.data.predictions || this.data.predictions.length === 0) {
+            container.html('<div class="text-center text-slate-400">Insufficient data for calibration analysis</div>');
+            return;
+        }
+        
         // Bin predictions
         const numBins = 10;
         const bins = Array(numBins).fill(0).map(() => ({
@@ -103,14 +109,18 @@ export default class CalibrationModule {
         }));
         
         this.data.predictions.forEach((pred, i) => {
-            const binIdx = Math.min(Math.floor(pred * numBins), numBins - 1);
-            bins[binIdx].predictions.push(pred);
-            bins[binIdx].outcomes.push(this.data.outcomes[i]);
+            if (pred !== undefined && pred !== null && i < this.data.outcomes.length) {
+                const binIdx = Math.min(Math.floor(pred * numBins), numBins - 1);
+                if (bins[binIdx]) {
+                    bins[binIdx].predictions.push(pred);
+                    bins[binIdx].outcomes.push(this.data.outcomes[i]);
+                }
+            }
         });
         
-        // Calculate bin statistics
+        // Calculate bin statistics (filter out empty bins)
         const binData = bins.map((bin, i) => {
-            if (bin.predictions.length === 0) return null;
+            if (!bin || bin.predictions.length === 0) return null;
             
             const avgPred = stats.mean(bin.predictions);
             const observedFreq = stats.mean(bin.outcomes);

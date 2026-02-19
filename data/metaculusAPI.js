@@ -40,10 +40,22 @@ export async function fetchMarkets() {
             data = JSON.parse(data);
         }
         
-        const binaryQuestions = (data.results || [])
-            .filter(q => q.possibilities && q.possibilities.type === 'binary');
+        // Handle different response formats
+        let results = data.results || data.questions || [];
+        if (!Array.isArray(results) && data && typeof data === 'object') {
+            // If response is an object with data property
+            results = data.data || [];
+        }
         
-        console.log(`Metaculus: Got ${binaryQuestions.length} binary questions`);
+        const binaryQuestions = (Array.isArray(results) ? results : [])
+            .filter(q => {
+                // More flexible binary question detection
+                if (q.possibilities && q.possibilities.type === 'binary') return true;
+                if (q.resolution !== null && (q.resolution === 0 || q.resolution === 1)) return true;
+                return false;
+            });
+        
+        console.log(`Metaculus: Got ${binaryQuestions.length} binary questions (from ${results.length} total)`);
         
         // Transform to our format (only binary questions)
         return binaryQuestions.map(transformMetaculusData);
