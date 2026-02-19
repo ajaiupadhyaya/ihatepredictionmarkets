@@ -20,7 +20,7 @@ export default class BetAnalyzerModule {
             <div class="bet-analyzer-module fade-in">
                 <div class="module-header">
                     <h2 class="text-3xl font-bold text-cyan-400 mb-2">🎯 Advanced Bet Analyzer</h2>
-                    <p class="text-slate-400">Deep dive mathematical analysis of individual markets with Bayesian updating, Kelly Criterion, Monte Carlo simulations, and option pricing models</p>
+                    <p class="text-slate-400">Deep dive mathematical analysis of individual markets with Bayesian updating, Kelly Criterion, and Monte Carlo simulations</p>
                 </div>
 
                 <!-- Market Selector -->
@@ -332,7 +332,7 @@ export default class BetAnalyzerModule {
                 </div>
                 <div class="stat-item">
                     <div class="stat-label">Half Kelly</div>
-                    <div class="stat-value">${(optimalKelly * 50).toFixed(2)}%</div>
+                    <div class="stat-value">${(optimalKelly * 0.5 * 100).toFixed(2)}%</div>
                 </div>
             </div>
         `;
