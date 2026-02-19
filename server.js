@@ -6,6 +6,10 @@ import cors from 'cors';
 const app = express();
 const PORT = 3001;
 
+// Enable CORS for all routes
+app.use(cors());
+app.use(express.json());
+
 // Simple in-memory cache for API responses
 const cache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
