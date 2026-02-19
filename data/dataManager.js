@@ -75,12 +75,12 @@ async function loadLiveData() {
     apiAttempts.push(
         retryFetch(() => polymarketAPI.fetchMarkets(), 'Polymarket')
             .then(data => {
-                console.log(`✅ Polymarket: ${data.length} markets loaded`);
+                console.log(`[DM] ✅ Polymarket returned ${data.length} markets`);
                 state.apiStatus.polymarket = 'online';
                 return data;
             })
             .catch(err => {
-                console.error('❌ Polymarket failed:', err.message);
+                console.error('[DM] ❌ Polymarket failed:', err.message);
                 state.apiStatus.polymarket = 'offline';
                 return [];
             })
@@ -90,12 +90,12 @@ async function loadLiveData() {
     apiAttempts.push(
         retryFetch(() => kalshiAPI.fetchMarkets(), 'Kalshi')
             .then(data => {
-                console.log(`✅ Kalshi: ${data.length} markets loaded`);
+                console.log(`[DM] ✅ Kalshi returned ${data.length} markets`);
                 state.apiStatus.kalshi = 'online';
                 return data;
             })
             .catch(err => {
-                console.error('❌ Kalshi failed:', err.message);
+                console.error('[DM] ❌ Kalshi failed:', err.message);
                 state.apiStatus.kalshi = 'offline';
                 return [];
             })
@@ -105,12 +105,12 @@ async function loadLiveData() {
     apiAttempts.push(
         retryFetch(() => metaculusAPI.fetchMarkets(), 'Metaculus')
             .then(data => {
-                console.log(`✅ Metaculus: ${data.length} markets loaded`);
+                console.log(`[DM] ✅ Metaculus returned ${data.length} markets`);
                 state.apiStatus.metaculus = 'online';
                 return data;
             })
             .catch(err => {
-                console.error('❌ Metaculus failed:', err.message);
+                console.error('[DM] ❌ Metaculus failed:', err.message);
                 state.apiStatus.metaculus = 'offline';
                 return [];
             })
@@ -122,13 +122,15 @@ async function loadLiveData() {
         .map(r => r.value)
         .flat();
     
+    console.log('[DM] All results settled, total markets collected:', allMarkets.length);
+    
     if (allMarkets.length === 0) {
-        console.error('🚨 NO DATA AVAILABLE FROM ANY API');
-        console.error('API Status:', state.apiStatus);
+        console.error('[DM] 🚨 NO DATA AVAILABLE FROM ANY API');
+        console.error('[DM] API Status:', state.apiStatus);
         throw new Error('All APIs failed - no data available');
     }
     
-    console.log(`📊 Total markets loaded: ${allMarkets.length}`);
+    console.log(`[DM] 📊 Total markets loaded: ${allMarkets.length}`);
     state.markets = allMarkets;
     state.forecasters = [];
 }
@@ -141,6 +143,7 @@ async function retryFetch(fetchFn, apiName, maxAttempts = 3) {
         try {
             console.log(`  [${apiName}] Attempt ${attempt}/${maxAttempts}...`);
             const result = await fetchFn();
+            console.log(`  [${apiName}] ✅ Attempt ${attempt} succeeded with ${result.length} items`);
             return result;
         } catch (error) {
             console.warn(`  [${apiName}] Attempt ${attempt} failed:`, error.message);

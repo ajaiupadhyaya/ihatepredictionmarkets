@@ -9,7 +9,7 @@ const FETCH_TIMEOUT = 15000; // 15 second timeout
  */
 export async function fetchMarkets() {
     try {
-        console.log('Kalshi: Fetching from backend proxy...');
+        console.log('[KL] Kalshi: Fetching from backend proxy...');
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
@@ -24,11 +24,14 @@ export async function fetchMarkets() {
         
         clearTimeout(timeoutId);
         
+        console.log('[KL] Response status:', response.status, 'OK:', response.ok);
+        
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
         const result = await response.json();
+        console.log('[KL] Response JSON received, success:', result.success);
         
         if (!result.success) {
             throw new Error(result.error || 'Proxy request failed');
@@ -36,7 +39,7 @@ export async function fetchMarkets() {
         
         const data = result.data;
         const markets = data.markets || [];
-        console.log(`Kalshi: Got ${markets.length} markets`);
+        console.log(`[KL] Got ${markets.length} markets`);
         
         if (!Array.isArray(markets) || markets.length === 0) {
             throw new Error('No markets in Kalshi response');
@@ -49,17 +52,18 @@ export async function fetchMarkets() {
                 const market = transformKalshiData(markets[i]);
                 transformed.push(market);
             } catch (err) {
-                console.warn(`Kalshi: Failed to transform market ${i}:`, err.message);
+                if (i < 5) console.warn(`[KL] Failed to transform market ${i}:`, err.message);
             }
         }
         
-        console.log(`Kalshi: Successfully transformed ${transformed.length}/${markets.length} markets`);
+        console.log(`[KL] ✅ Successfully transformed ${transformed.length}/${markets.length} markets`);
         if (transformed.length === 0) {
             throw new Error('Failed to transform any Kalshi markets');
         }
         return transformed;
     } catch (error) {
-        console.error('Kalshi API error:', error.message);
+        console.error('[KL] ❌ Kalshi API error:', error.message);
+        console.error('[KL] Stack:', error.stack);
         throw error;
     }
 }

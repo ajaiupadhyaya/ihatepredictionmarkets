@@ -9,7 +9,7 @@ const FETCH_TIMEOUT = 15000; // 15 second timeout
  */
 export async function fetchMarkets() {
     try {
-        console.log('Polymarket: Fetching from backend proxy...');
+        console.log('[PM] Polymarket: Fetching from backend proxy...');
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
@@ -24,11 +24,14 @@ export async function fetchMarkets() {
         
         clearTimeout(timeoutId);
         
+        console.log('[PM] Response status:', response.status, 'OK:', response.ok);
+        
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
         const result = await response.json();
+        console.log('[PM] Response JSON received, success:', result.success);
         
         if (!result.success) {
             throw new Error(result.error || 'Proxy request failed');
@@ -36,8 +39,9 @@ export async function fetchMarkets() {
         
         // Handle both array and object responses
         const data = result.data;
+        console.log('[PM] Data structure keys:', Object.keys(data || {}));
         const markets = Array.isArray(data) ? data : (data.markets || data.data || []);
-        console.log(`Polymarket: Got ${markets.length} markets`);
+        console.log('[PM] Extracted markets count:', markets.length);
         
         if (!Array.isArray(markets) || markets.length === 0) {
             throw new Error('No markets in Polymarket response');
@@ -50,17 +54,18 @@ export async function fetchMarkets() {
                 const market = transformPolymarketData(markets[i]);
                 transformed.push(market);
             } catch (err) {
-                console.warn(`Polymarket: Failed to transform market ${i}:`, err.message);
+                if (i < 5) console.warn(`[PM] Failed to transform market ${i}:`, err.message);
             }
         }
         
-        console.log(`Polymarket: Successfully transformed ${transformed.length}/${markets.length} markets`);
+        console.log(`[PM] ✅ Successfully transformed ${transformed.length}/${markets.length} markets`);
         if (transformed.length === 0) {
             throw new Error('Failed to transform any Polymarket markets');
         }
         return transformed;
     } catch (error) {
-        console.error('Polymarket API error:', error.message);
+        console.error('[PM] ❌ Polymarket API error:', error.message);
+        console.error('[PM] Stack:', error.stack);
         throw error;
     }
 }

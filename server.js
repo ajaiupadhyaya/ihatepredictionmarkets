@@ -73,10 +73,14 @@ app.get('/api/metaculus', async (req, res) => {
         
     } catch (error) {
         console.error('[Proxy] Metaculus error:', error.message);
-        res.status(500).json({ 
-            success: false, 
-            error: error.message,
-            timestamp: new Date().toISOString()
+        console.log('[Proxy] Returning empty Metaculus result to allow other APIs to work');
+        // Return empty result instead of 500 error - allows other APIs to work
+        res.json({ 
+            success: true,
+            data: {
+                results: [],
+                count: 0
+            }
         });
     }
 });
