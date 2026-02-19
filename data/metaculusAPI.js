@@ -2,6 +2,7 @@
 // Public API for fetching questions and community predictions
 
 const METACULUS_API = 'https://www.metaculus.com/api2';
+const CORS_PROXY = 'https://api.allorigins.win/raw?url=';
 const FETCH_TIMEOUT = 10000; // 10 second timeout
 
 /**
@@ -15,7 +16,10 @@ export async function fetchMarkets() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
         
-        const response = await fetch(`${METACULUS_API}/questions/?status=resolved&limit=100`, {
+        const endpoint = `${METACULUS_API}/questions/?status=resolved&limit=100`;
+        const corsUrl = `${CORS_PROXY}${encodeURIComponent(endpoint)}`;
+        
+        const response = await fetch(corsUrl, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
@@ -29,7 +33,13 @@ export async function fetchMarkets() {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        const data = await response.json();
+        let data = await response.json();
+        
+        // If response is wrapped (as string from CORS proxy), parse it
+        if (typeof data === 'string') {
+            data = JSON.parse(data);
+        }
+        
         const binaryQuestions = (data.results || [])
             .filter(q => q.possibilities && q.possibilities.type === 'binary');
         

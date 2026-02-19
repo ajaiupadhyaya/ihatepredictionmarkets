@@ -31,10 +31,17 @@ export async function fetchMarkets() {
         }
         
         const data = await response.json();
-        console.log(`Polymarket: Got ${data.length} markets`);
+        
+        // Handle both array and object responses
+        const markets = Array.isArray(data) ? data : (data.markets || data.data || []);
+        console.log(`Polymarket: Got ${markets.length} markets`);
+        
+        if (!Array.isArray(markets) || markets.length === 0) {
+            throw new Error('No markets in Polymarket response');
+        }
         
         // Transform to our format
-        return data.map(transformPolymarketData);
+        return markets.map(transformPolymarketData);
     } catch (error) {
         console.error('Polymarket API error:', error.message);
         throw error;

@@ -1,3 +1,6 @@
+/* Tailwind CSS Directives */
+@import "tailwindcss";
+
 /* Base Styles */
 :root {
     --color-bg-primary: #020617;
