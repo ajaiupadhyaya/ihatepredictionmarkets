@@ -3,30 +3,40 @@
 
 const POLYMARKET_API = 'https://gamma-api.polymarket.com';
 const CLOB_API = 'https://clob.polymarket.com';
+const FETCH_TIMEOUT = 10000; // 10 second timeout
 
 /**
  * Fetch markets from Polymarket
  */
 export async function fetchMarkets() {
     try {
-        // Fetch active markets
+        console.log('Polymarket: Fetching from', CLOB_API);
+        
+        // Create abort controller for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+        
         const response = await fetch(`${CLOB_API}/markets`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
-            }
+            },
+            signal: controller.signal
         });
         
+        clearTimeout(timeoutId);
+        
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
         const data = await response.json();
+        console.log(`Polymarket: Got ${data.length} markets`);
         
         // Transform to our format
         return data.map(transformPolymarketData);
     } catch (error) {
-        console.warn('Polymarket API error:', error);
+        console.error('Polymarket API error:', error.message);
         throw error;
     }
 }

@@ -1,32 +1,41 @@
 // Kalshi API Integration
-// Note: Kalshi API requires authentication for most endpoints
-// This is a stub that will gracefully fall back to synthetic data
+// Public API endpoints for fetching market data
 
 const KALSHI_API = 'https://api.elections.kalshi.com/trade-api/v2';
+const FETCH_TIMEOUT = 10000; // 10 second timeout
 
 /**
  * Fetch markets from Kalshi
  */
 export async function fetchMarkets() {
     try {
-        // Public markets endpoint (limited data without auth)
+        console.log('Kalshi: Fetching from', KALSHI_API);
+        
+        // Create abort controller for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+        
         const response = await fetch(`${KALSHI_API}/markets`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
-            }
+            },
+            signal: controller.signal
         });
         
+        clearTimeout(timeoutId);
+        
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
         const data = await response.json();
+        console.log(`Kalshi: Got ${data.markets?.length || 0} markets`);
         
         // Transform to our format
         return (data.markets || []).map(transformKalshiData);
     } catch (error) {
-        console.warn('Kalshi API error:', error);
+        console.error('Kalshi API error:', error.message);
         throw error;
     }
 }

@@ -309,65 +309,70 @@ export default class HomeModule {
     }
 
     renderEvidencePanel(container) {
-        const markets = this.data?.markets || [];
-        const resolved = markets.filter(m => m.resolved);
-        const active = markets.filter(m => !m.resolved);
-        const totalVolume = markets.reduce((sum, market) => sum + (market.volume || 0), 0);
-        const avgProbability = markets.length > 0
-            ? markets.reduce((sum, market) => sum + (market.currentProbability ?? market.finalProbability ?? 0), 0) / markets.length
-            : 0;
+        try {
+            const markets = this.data?.markets || [];
+            const resolved = markets.filter(m => m.resolved);
+            const active = markets.filter(m => !m.resolved);
+            const totalVolume = markets.reduce((sum, market) => sum + (market.volume || 0), 0);
+            const avgProbability = markets.length > 0
+                ? markets.reduce((sum, market) => sum + (market.currentProbability ?? market.finalProbability ?? 0), 0) / markets.length
+                : 0;
 
-        // Try to get evaluation metrics if available
-        let evaluationMetrics = null;
-        if (this.state.evaluator && this.state.evaluator.finalArtifacts) {
-            evaluationMetrics = this.state.evaluator.finalArtifacts.pipeline?.report?.testMetrics;
-        }
+            // Try to get evaluation metrics if available
+            let evaluationMetrics = null;
+            try {
+                if (this.state?.evaluator?.finalArtifacts?.pipeline?.report?.testMetrics) {
+                    evaluationMetrics = this.state.evaluator.finalArtifacts.pipeline.report.testMetrics;
+                }
+            } catch (e) {
+                console.warn('Could not access evaluation metrics:', e.message);
+            }
 
-        let evaluationHtml = '';
-        if (evaluationMetrics && evaluationMetrics.brierScore !== undefined) {
-            evaluationHtml = `
-                <div class="mt-6 pt-6 border-t border-slate-300">
-                    <div class="font-semibold text-slate-700 mb-3">Model Performance (Test Set)</div>
-                    <div class="grid grid-cols-2 gap-3 text-sm">
-                        <div class="bg-slate-50 p-3 rounded-sm">
-                            <div class="text-slate-600">Brier Score</div>
-                            <div class="font-mono font-bold text-slate-900">${evaluationMetrics.brierScore?.toFixed(4) || '—'}</div>
+            let evaluationHtml = '';
+            if (evaluationMetrics && evaluationMetrics.brierScore !== undefined && evaluationMetrics.brierScore !== null) {
+                evaluationHtml = `
+                    <div class="mt-6 pt-6 border-t border-slate-300">
+                        <div class="font-semibold text-slate-700 mb-3">Model Performance (Test Set)</div>
+                        <div class="grid grid-cols-2 gap-3 text-sm">
+                            <div class="bg-slate-50 p-3 rounded-sm">
+                                <div class="text-slate-600">Brier Score</div>
+                                <div class="font-mono font-bold text-slate-900">${evaluationMetrics.brierScore?.toFixed(4) || '—'}</div>
+                            </div>
+                            <div class="bg-slate-50 p-3 rounded-sm">
+                                <div class="text-slate-600">Log Score</div>
+                                <div class="font-mono font-bold text-slate-900">${evaluationMetrics.logScore?.toFixed(4) || '—'}</div>
+                            </div>
+                            <div class="bg-slate-50 p-3 rounded-sm">
+                                <div class="text-slate-600">Calibration (ECE)</div>
+                                <div class="font-mono font-bold text-slate-900">${evaluationMetrics.ece?.toFixed(4) || '—'}</div>
+                            </div>
+                            <div class="bg-slate-50 p-3 rounded-sm">
+                                <div class="text-slate-600">Spherical Score</div>
+                                <div class="font-mono font-bold text-slate-900">${evaluationMetrics.sphericalScore?.toFixed(4) || '—'}</div>
+                            </div>
                         </div>
-                        <div class="bg-slate-50 p-3 rounded-sm">
-                            <div class="text-slate-600">Log Score</div>
-                            <div class="font-mono font-bold text-slate-900">${evaluationMetrics.logScore?.toFixed(4) || '—'}</div>
-                        </div>
-                        <div class="bg-slate-50 p-3 rounded-sm">
-                            <div class="text-slate-600">Calibration (ECE)</div>
-                            <div class="font-mono font-bold text-slate-900">${evaluationMetrics.ece?.toFixed(4) || '—'}</div>
-                        </div>
-                        <div class="bg-slate-50 p-3 rounded-sm">
-                            <div class="text-slate-600">Spherical Score</div>
-                            <div class="font-mono font-bold text-slate-900">${evaluationMetrics.sphericalScore?.toFixed(4) || '—'}</div>
+                        <div class="mt-3 text-xs text-slate-500">
+                            Metrics computed on held-out test set using deterministic train/validation/test split (seed=42).
+                            K-fold cross-validation and rolling-window backtest available in evaluation artifacts.
                         </div>
                     </div>
-                    <div class="mt-3 text-xs text-slate-500">
-                        Metrics computed on held-out test set using deterministic train/validation/test split (seed=42).
-                        K-fold cross-validation and rolling-window backtest available in evaluation artifacts.
-                    </div>
-                </div>
-            `;
-        }
+                `;
+            }
 
-        container.innerHTML = `
-            <div class="card p-6 mb-6">
-                <div class="card-header">
-                    <div>
-                        <div class="card-title">Research Evidence Panel</div>
-                        <div class="card-subtitle">Strict real-data mode — synthetic fallbacks disabled</div>
+            container.innerHTML = `
+                <div class="card p-6 mb-6">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Research Evidence Panel</div>
+                            <div class="card-subtitle">Strict real-data mode — synthetic fallbacks disabled</div>
+                        </div>
+                        <div class="text-xs text-slate-500">Updated ${new Date().toLocaleTimeString()}</div>
                     </div>
-                    <div class="text-xs text-slate-500">Updated ${new Date().toLocaleTimeString()}</div>
-                </div>
-                <div class="stats-grid mt-4">
-                    <div class="stat-card">
-                        <div class="stat-label">Markets</div>
-                        <div class="stat-value">${markets.length}</div>
-                    </div>
+                    <div class="stats-grid mt-4">
+                        <div class="stat-card">
+                            <div class="stat-label">Markets</div>
+                            <div class="stat-value">${markets.length}</div>
+                        </div>
                     <div class="stat-card">
                         <div class="stat-label">Resolved</div>
                         <div class="stat-value">${resolved.length}</div>
@@ -390,6 +395,23 @@ export default class HomeModule {
                 ${evaluationHtml}
             </div>
         `;
+        } catch (error) {
+            console.error('Error rendering evidence panel:', error);
+            container.innerHTML = `
+                <div class="card p-6 mb-6">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Research Evidence Panel</div>
+                            <div class="card-subtitle">Error rendering panel</div>
+                        </div>
+                    </div>
+                    <div style="color: #dc2626; font-size: 14px; line-height: 1.6;">
+                        <p>An error occurred while rendering the evidence panel.</p>
+                        <p style="font-size: 12px; opacity: 0.7; margin-top: 8px;">${error.message}</p>
+                    </div>
+                </div>
+            `;
+        }
     }
 
     create3DNetworkPreview() {

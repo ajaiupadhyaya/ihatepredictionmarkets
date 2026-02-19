@@ -2,31 +2,43 @@
 // Public API for fetching questions and community predictions
 
 const METACULUS_API = 'https://www.metaculus.com/api2';
+const FETCH_TIMEOUT = 10000; // 10 second timeout
 
 /**
  * Fetch questions from Metaculus
  */
 export async function fetchMarkets() {
     try {
+        console.log('Metaculus: Fetching from', METACULUS_API);
+        
+        // Create abort controller for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+        
         const response = await fetch(`${METACULUS_API}/questions/?status=resolved&limit=100`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
-            }
+            },
+            signal: controller.signal
         });
         
+        clearTimeout(timeoutId);
+        
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
         const data = await response.json();
+        const binaryQuestions = (data.results || [])
+            .filter(q => q.possibilities && q.possibilities.type === 'binary');
+        
+        console.log(`Metaculus: Got ${binaryQuestions.length} binary questions`);
         
         // Transform to our format (only binary questions)
-        return (data.results || [])
-            .filter(q => q.possibilities && q.possibilities.type === 'binary')
-            .map(transformMetaculusData);
+        return binaryQuestions.map(transformMetaculusData);
     } catch (error) {
-        console.warn('Metaculus API error:', error);
+        console.error('Metaculus API error:', error.message);
         throw error;
     }
 }

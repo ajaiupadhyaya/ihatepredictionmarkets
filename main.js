@@ -98,13 +98,27 @@ async function init() {
         // Initialize data layer
         await initializeData();
         
-        // Initialize evaluation framework
-        evaluationOrchestrator = new EvaluationOrchestrator({
-            evaluationScenario: 'strict',
-            datasetScenario: 'strict'
-        });
-        state.evaluator = evaluationOrchestrator;
-        console.log('✅ Evaluation framework initialized');
+        // Initialize evaluation framework only if we have data
+        try {
+            if (state.markets && state.markets.length > 0) {
+                evaluationOrchestrator = new EvaluationOrchestrator({
+                    evaluationScenario: 'strict',
+                    datasetScenario: 'strict'
+                });
+                state.evaluator = evaluationOrchestrator;
+                console.log('✅ Evaluation framework initialized');
+            } else {
+                console.warn('⚠️ No market data available; evaluation framework deferred');
+                evaluationOrchestrator = new EvaluationOrchestrator({
+                    evaluationScenario: 'default',
+                    datasetScenario: 'default'
+                });
+                state.evaluator = evaluationOrchestrator;
+            }
+        } catch (evalError) {
+            console.warn('⚠️ Evaluation framework initialization failed (non-critical):', evalError.message);
+            // Continue without evaluator; modules should work without it
+        }
         
         // Load default module
         await loadModule('home');

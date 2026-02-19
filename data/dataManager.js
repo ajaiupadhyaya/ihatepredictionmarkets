@@ -1,6 +1,5 @@
-// Data Manager - Coordinates data fetching and caching
+// Data Manager - Coordinates data fetching and caching (LIVE REAL DATA ONLY)
 import { state } from '../state.js';
-import * as syntheticData from './syntheticData.js';
 import * as polymarketAPI from './polymarketAPI.js';
 import * as kalshiAPI from './kalshiAPI.js';
 import * as metaculusAPI from './metaculusAPI.js';
@@ -41,26 +40,22 @@ const cache = new DataCache();
  * Initialize data layer
  */
 export async function initializeData() {
-    console.log('📡 Initializing data layer...');
+    console.log('📡 Initializing data layer (LIVE DATA ONLY)...');
     
     try {
         if (state.useLiveData) {
             await loadLiveData();
         } else {
-            await loadSyntheticData();
+            console.error('❌ Live data disabled in state but required');
+            state.markets = [];
         }
     } catch (error) {
-        if (state.useLiveData && state.strictRealData) {
-            console.error('Failed to load live data in strict mode:', error);
-            state.markets = [];
-            state.forecasters = [];
-            state.apiStatus.polymarket = 'offline';
-            state.apiStatus.kalshi = 'offline';
-            state.apiStatus.metaculus = 'offline';
-        } else {
-            console.warn('Failed to load live data, falling back to synthetic:', error);
-            await loadSyntheticData();
-        }
+        console.error('❌ CRITICAL: Failed to load live data:', error);
+        console.error('Stack:', error.stack);
+        state.markets = [];
+        state.apiStatus.polymarket = 'offline';
+        state.apiStatus.kalshi = 'offline';
+        state.apiStatus.metaculus = 'offline';
     }
     
     state.lastUpdate = new Date();
@@ -68,74 +63,95 @@ export async function initializeData() {
 }
 
 /**
- * Load live data from APIs
+ * Load live data from APIs with retries
  */
 async function loadLiveData() {
-    const strictMode = state.strictRealData;
-    const promises = [];
+    console.log('🌐 Fetching from live APIs...');
     
-    // Try fetching from each platform
-    promises.push(
-        polymarketAPI.fetchMarkets()
+    // Try each API with retry logic
+    const apiAttempts = [];
+    
+    // Polymarket
+    apiAttempts.push(
+        retryFetch(() => polymarketAPI.fetchMarkets(), 'Polymarket')
             .then(data => {
+                console.log(`✅ Polymarket: ${data.length} markets loaded`);
                 state.apiStatus.polymarket = 'online';
                 return data;
             })
             .catch(err => {
-                state.apiStatus.polymarket = strictMode ? 'offline' : 'synthetic';
+                console.error('❌ Polymarket failed:', err.message);
+                state.apiStatus.polymarket = 'offline';
                 return [];
             })
     );
     
-    promises.push(
-        kalshiAPI.fetchMarkets()
+    // Kalshi
+    apiAttempts.push(
+        retryFetch(() => kalshiAPI.fetchMarkets(), 'Kalshi')
             .then(data => {
+                console.log(`✅ Kalshi: ${data.length} markets loaded`);
                 state.apiStatus.kalshi = 'online';
                 return data;
             })
             .catch(err => {
-                state.apiStatus.kalshi = strictMode ? 'offline' : 'synthetic';
+                console.error('❌ Kalshi failed:', err.message);
+                state.apiStatus.kalshi = 'offline';
                 return [];
             })
     );
     
-    promises.push(
-        metaculusAPI.fetchMarkets()
+    // Metaculus
+    apiAttempts.push(
+        retryFetch(() => metaculusAPI.fetchMarkets(), 'Metaculus')
             .then(data => {
+                console.log(`✅ Metaculus: ${data.length} markets loaded`);
                 state.apiStatus.metaculus = 'online';
                 return data;
             })
             .catch(err => {
-                state.apiStatus.metaculus = strictMode ? 'offline' : 'synthetic';
+                console.error('❌ Metaculus failed:', err.message);
+                state.apiStatus.metaculus = 'offline';
                 return [];
             })
     );
     
-    const results = await Promise.all(promises);
-    const allMarkets = results.flat();
-
+    const results = await Promise.allSettled(apiAttempts);
+    const allMarkets = results
+        .filter(r => r.status === 'fulfilled')
+        .map(r => r.value)
+        .flat();
+    
+    if (allMarkets.length === 0) {
+        console.error('🚨 NO DATA AVAILABLE FROM ANY API');
+        console.error('API Status:', state.apiStatus);
+        throw new Error('All APIs failed - no data available');
+    }
+    
+    console.log(`📊 Total markets loaded: ${allMarkets.length}`);
     state.markets = allMarkets;
     state.forecasters = [];
 }
 
 /**
- * Load synthetic data
+ * Retry a fetch operation with exponential backoff
  */
-async function loadSyntheticData() {
-    console.log('🎲 Generating synthetic data...');
-    
-    const resolvedMarkets = syntheticData.generateResolvedMarkets(500);
-    const openMarkets = syntheticData.generateOpenMarkets(200);
-    
-    state.markets = [...resolvedMarkets, ...openMarkets];
-    state.forecasters = syntheticData.generateForecasters(100, state.markets);
-    
-    // Mark all as synthetic
-    state.apiStatus.polymarket = 'synthetic';
-    state.apiStatus.kalshi = 'synthetic';
-    state.apiStatus.metaculus = 'synthetic';
-    
-    console.log(`✅ Generated ${state.markets.length} markets, ${state.forecasters.length} forecasters`);
+async function retryFetch(fetchFn, apiName, maxAttempts = 3) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            console.log(`  [${apiName}] Attempt ${attempt}/${maxAttempts}...`);
+            const result = await fetchFn();
+            return result;
+        } catch (error) {
+            console.warn(`  [${apiName}] Attempt ${attempt} failed:`, error.message);
+            if (attempt < maxAttempts) {
+                const backoffMs = Math.pow(2, attempt - 1) * 1000;
+                console.log(`  [${apiName}] Retrying in ${backoffMs}ms...`);
+                await new Promise(resolve => setTimeout(resolve, backoffMs));
+            }
+        }
+    }
+    throw new Error(`${apiName} failed after ${maxAttempts} attempts`);
 }
 
 /**

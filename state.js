@@ -18,7 +18,7 @@ export const state = {
     
     // Settings
     useLiveData: true,
-    strictRealData: true,
+    strictRealData: true,  // ENFORCED: Real data only, no synthetic fallback
     
     // API Status
     apiStatus: {
