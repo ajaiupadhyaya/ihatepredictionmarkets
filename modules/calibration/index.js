@@ -80,13 +80,13 @@ export default class CalibrationModule {
             </div>
         `;
         
-        // Render all charts
-        this.renderCalibrationChart();
-        this.renderSharpnessChart();
-        this.renderBrierDecomposition();
-        this.renderCategoryComparison();
-        this.renderStats();
-        this.renderMethodology();
+        // Render all charts with error handling
+        try { this.renderCalibrationChart(); } catch (e) { console.warn('Calibration chart error:', e.message); }
+        try { this.renderSharpnessChart(); } catch (e) { console.warn('Sharpness chart error:', e.message); }
+        try { this.renderBrierDecomposition(); } catch (e) { console.warn('Brier decomp error:', e.message); }
+        try { this.renderCategoryComparison(); } catch (e) { console.warn('Category comparison error:', e.message); }
+        try { this.renderStats(); } catch (e) { console.warn('Stats error:', e.message); }
+        try { this.renderMethodology(); } catch (e) { console.warn('Methodology error:', e.message); }
     }
     
     renderCalibrationChart() {
@@ -476,11 +476,18 @@ export default class CalibrationModule {
     renderCategoryComparison() {
         // Small multiples of calibration curves by category
         const container = d3.select('#category-charts');
+        
+        // Defensive check
+        if (!this.data || !this.data.categories || this.data.categories.length === 0) {
+            container.html('<div class="text-slate-400 p-4">No category data available</div>');
+            return;
+        }
+        
         const width = container.node().clientWidth;
         const height = 400;
         
         // Group by category
-        const categories = this.data.categories;
+        const categories = this.data.categories.filter(c => c); // Filter out null/undefined
         const cols = Math.ceil(Math.sqrt(categories.length));
         const rows = Math.ceil(categories.length / cols);
         
@@ -499,23 +506,29 @@ export default class CalibrationModule {
             const g = svg.append('g')
                 .attr('transform', `translate(${col * smallWidth},${row * smallHeight})`);
             
-            // Filter data for this category
-            const categoryMarkets = this.data.markets.filter(m => m.category === category);
-            const predictions = categoryMarkets.map(m => m.finalProbability);
-            const outcomes = categoryMarkets.map(m => m.outcome);
+            // Filter data for this category (with defensive checks)
+            const categoryMarkets = (this.data.markets || [])
+                .filter(m => m && m.category === category && m.finalProbability !== undefined && m.outcome !== undefined);
             
-            if (predictions.length === 0) return;
+            if (categoryMarkets.length === 0) return;
             
-            // Bin
+            const predictions = categoryMarkets.map(m => m.finalProbability).filter(p => p !== null && p !== undefined && !isNaN(p));
+            const outcomes = categoryMarkets.map(m => m.outcome).filter(o => o !== null && o !== undefined);
+            
+            if (predictions.length === 0 || outcomes.length === 0) return;
+            
+            // Bin with defensive access
             const bins = Array(5).fill(0).map(() => ({ predictions: [], outcomes: [] }));
             predictions.forEach((pred, i) => {
                 const binIdx = Math.min(Math.floor(pred * 5), 4);
-                bins[binIdx].predictions.push(pred);
-                bins[binIdx].outcomes.push(outcomes[i]);
+                if (bins[binIdx] && outcomes[i] !== null && outcomes[i] !== undefined) {
+                    bins[binIdx].predictions.push(pred);
+                    bins[binIdx].outcomes.push(outcomes[i]);
+                }
             });
             
             const binData = bins.map(bin => {
-                if (bin.predictions.length === 0) return null;
+                if (!bin || bin.predictions.length === 0) return null;
                 return {
                     avgPred: stats.mean(bin.predictions),
                     obsFreq: stats.mean(bin.outcomes)
