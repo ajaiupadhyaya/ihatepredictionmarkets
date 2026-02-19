@@ -15,10 +15,12 @@ import LeaderboardModule from './modules/leaderboard/index.js';
 import WhalesModule from './modules/whales/index.js';
 import TailRiskModule from './modules/tail-risk/index.js';
 import TemporalModule from './modules/temporal/index.js';
+import BetAnalyzerModule from './modules/bet-analyzer/index.js';
 
 // Module registry
 const modules = {
     'home': HomeModule,
+    'bet-analyzer': BetAnalyzerModule,
     'calibration': CalibrationModule,
     'crowd-wisdom': CrowdWisdomModule,
     'price-discovery': PriceDiscoveryModule,
