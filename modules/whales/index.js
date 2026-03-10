@@ -3,14 +3,12 @@ import * as d3 from 'd3';
 import * as stats from '../../stats/index.js';
 import * as ui from '../../utils/ui.js';
 import { getModuleData } from '../../data/dataManager.js';
-import p5 from 'p5';
 
 export default class WhalesModule {
     constructor(container, state) {
         this.container = container;
         this.state = state;
         this.data = null;
-        this.p5Instance = null;
     }
     
     async render() {
@@ -18,7 +16,12 @@ export default class WhalesModule {
         this.data = await getModuleData('whales');
         
         if (!this.data || !this.data.trades) {
-            this.container.innerHTML = '<div class="error-card"><div class="error-title">No Data Available</div></div>';
+            this.container.innerHTML = `
+                <div class="card p-6">
+                    <div class="card-title mb-2">Whale Analytics Need Trade Flow</div>
+                    <p class="text-slate-400 text-sm leading-relaxed">The selected scope does not yet include enough volume-ranked trade proxies. Broaden filters or switch Focus Bet.</p>
+                </div>
+            `;
             return;
         }
         
@@ -34,11 +37,11 @@ export default class WhalesModule {
                     <div class="card">
                         <div class="card-header">
                             <div>
-                                <div class="card-title">Trade Impact Simulation</div>
-                                <div class="card-subtitle">P5.js visualization</div>
+                                <div class="card-title">Whale Footprint Ladder</div>
+                                <div class="card-subtitle">Top-trade dominance and signed impact path</div>
                             </div>
                         </div>
-                        <div id="impact-sim" style="height: 400px;"></div>
+                        <div id="impact-sim" class="chart-container"></div>
                     </div>
                     
                     <div class="card">
@@ -90,167 +93,175 @@ export default class WhalesModule {
         this.renderStats();
         this.renderMethodology();
     }
-    
+
     renderImpactSimulation() {
-        const containerEl = document.getElementById('impact-sim');
-        const width = containerEl.clientWidth;
+        const container = d3.select('#impact-sim');
+        const width = container.node().clientWidth;
         const height = 400;
-        
-        const trades = this.data.trades || [];
-        const maxSize = d3.max(trades, d => d.size) || 10000;
-        
-        const sketch = (p) => {
-            let particles = [];
-            let ripples = [];
-            let tradeIndex = 0;
-            let frameCounter = 0;
-            const centerY = height / 2;
-            
-            class Particle {
-                constructor(trade) {
-                    this.x = 50;
-                    this.y = centerY;
-                    this.targetX = width - 50;
-                    this.size = p.map(trade.size, 0, maxSize, 5, 25);
-                    this.isBuy = trade.isBuy;
-                    this.impact = p.map(trade.priceImpact, 0, 0.1, 0, 50);
-                    this.speed = p.map(this.size, 5, 25, 4, 1.5);
-                    this.alpha = 255;
-                    this.trail = [];
-                }
-                
-                update() {
-                    // Store trail
-                    this.trail.push({ x: this.x, y: this.y });
-                    if (this.trail.length > 10) this.trail.shift();
-                    
-                    // Move right
-                    this.x += this.speed;
-                    
-                    // Oscillate based on impact
-                    this.y = centerY + this.impact * p.sin(this.x * 0.05);
-                    
-                    // Fade when reaching target
-                    if (this.x > this.targetX) {
-                        this.alpha -= 5;
-                    }
-                }
-                
-                display() {
-                    // Draw trail
-                    p.stroke(this.isBuy ? 16 : 239, this.isBuy ? 185 : 68, this.isBuy ? 129 : 68, this.alpha * 0.3);
-                    p.strokeWeight(2);
-                    p.noFill();
-                    p.beginShape();
-                    for (let pt of this.trail) {
-                        p.vertex(pt.x, pt.y);
-                    }
-                    p.endShape();
-                    
-                    // Draw particle
-                    p.noStroke();
-                    if (this.isBuy) {
-                        p.fill(16, 185, 129, this.alpha); // Green
-                    } else {
-                        p.fill(239, 68, 68, this.alpha); // Red
-                    }
-                    p.ellipse(this.x, this.y, this.size);
-                    
-                    // Draw glow for large trades
-                    if (this.size > 15) {
-                        p.fill(this.isBuy ? 16 : 239, this.isBuy ? 185 : 68, this.isBuy ? 129 : 68, this.alpha * 0.2);
-                        p.ellipse(this.x, this.y, this.size * 1.5);
-                    }
-                }
-                
-                isDead() {
-                    return this.alpha <= 0;
-                }
-            }
-            
-            class Ripple {
-                constructor(x, y, maxRadius) {
-                    this.x = x;
-                    this.y = y;
-                    this.radius = 0;
-                    this.maxRadius = maxRadius;
-                    this.alpha = 255;
-                }
-                
-                update() {
-                    this.radius += 2;
-                    this.alpha -= 5;
-                }
-                
-                display() {
-                    p.noFill();
-                    p.stroke(34, 211, 238, this.alpha);
-                    p.strokeWeight(2);
-                    p.ellipse(this.x, this.y, this.radius);
-                }
-                
-                isDead() {
-                    return this.radius >= this.maxRadius || this.alpha <= 0;
-                }
-            }
-            
-            p.setup = () => {
-                p.createCanvas(width, height);
-                p.background(15, 23, 42);
+        const margin = { top: 20, right: 60, bottom: 50, left: 70 };
+
+        const svg = container.append('svg')
+            .attr('width', width)
+            .attr('height', height);
+
+        const g = svg.append('g')
+            .attr('transform', `translate(${margin.left},${margin.top})`);
+
+        const chartWidth = width - margin.left - margin.right;
+        const chartHeight = height - margin.top - margin.bottom;
+
+        const trades = (this.data.trades || [])
+            .filter(trade => Number.isFinite(trade.size) && Number.isFinite(trade.priceImpact))
+            .sort((a, b) => (b.size || 0) - (a.size || 0))
+            .slice(0, 80);
+
+        if (trades.length < 10) {
+            container.html('<div class="text-slate-400 p-4">Insufficient whale trades to render footprint ladder</div>');
+            return;
+        }
+
+        let cumulativeSignedImpact = 0;
+        const footprint = trades.map((trade, index) => {
+            const signedImpact = (trade.isBuy ? 1 : -1) * Math.abs(trade.priceImpact || 0);
+            cumulativeSignedImpact += signedImpact;
+
+            return {
+                rank: index + 1,
+                size: trade.size,
+                signedImpact,
+                cumulativeSignedImpact,
+                isBuy: !!trade.isBuy
             };
-            
-            p.draw = () => {
-                p.background(15, 23, 42, 50); // Fade effect
-                
-                // Baseline
-                p.stroke(100, 100, 100, 100);
-                p.strokeWeight(1);
-                p.line(0, centerY, width, centerY);
-                
-                // Add new particles
-                frameCounter++;
-                if (frameCounter % 20 === 0 && tradeIndex < trades.length) {
-                    const trade = trades[tradeIndex];
-                    particles.push(new Particle(trade));
-                    
-                    // Create ripple for large trades
-                    if (trade.size > maxSize * 0.3) {
-                        ripples.push(new Ripple(50, centerY, p.map(trade.size, 0, maxSize, 30, 100)));
-                    }
-                    
-                    tradeIndex++;
-                    if (tradeIndex >= trades.length) tradeIndex = 0;
-                }
-                
-                // Update and display ripples
-                for (let i = ripples.length - 1; i >= 0; i--) {
-                    ripples[i].update();
-                    ripples[i].display();
-                    if (ripples[i].isDead()) {
-                        ripples.splice(i, 1);
-                    }
-                }
-                
-                // Update and display particles
-                for (let i = particles.length - 1; i >= 0; i--) {
-                    particles[i].update();
-                    particles[i].display();
-                    if (particles[i].isDead()) {
-                        particles.splice(i, 1);
-                    }
-                }
-                
-                // Labels
-                p.noStroke();
-                p.fill(148, 163, 184);
-                p.textSize(11);
-                p.textAlign(p.LEFT);
-                p.text('Large trades create bigger ripples', 10, 25);
-                p.text('Vertical displacement = price impact', 10, 40);
-            };
-        };
-        
-        this.p5Instance = new p5(sketch, containerEl);
+        });
+
+        const x = d3.scaleLinear()
+            .domain([1, footprint.length])
+            .range([0, chartWidth]);
+
+        const yImpactExtent = d3.extent(footprint, d => d.signedImpact);
+        const yImpact = d3.scaleLinear()
+            .domain([Math.min(yImpactExtent[0] * 1.2, -0.001), Math.max(yImpactExtent[1] * 1.2, 0.001)])
+            .nice()
+            .range([chartHeight, 0]);
+
+        const yCum = d3.scaleLinear()
+            .domain(d3.extent(footprint, d => d.cumulativeSignedImpact))
+            .nice()
+            .range([chartHeight, 0]);
+
+        const ySize = d3.scaleSqrt()
+            .domain([0, d3.max(footprint, d => d.size) || 1])
+            .range([0, chartHeight * 0.45]);
+
+        g.append('line')
+            .attr('x1', 0)
+            .attr('x2', chartWidth)
+            .attr('y1', yImpact(0))
+            .attr('y2', yImpact(0))
+            .attr('stroke', '#64748b')
+            .attr('stroke-dasharray', '4,4');
+
+        const barWidth = Math.max(3, chartWidth / footprint.length - 1);
+        g.selectAll('.footprint-bar')
+            .data(footprint)
+            .enter()
+            .append('rect')
+            .attr('class', 'footprint-bar')
+            .attr('x', d => x(d.rank) - barWidth / 2)
+            .attr('y', d => chartHeight - ySize(d.size))
+            .attr('width', barWidth)
+            .attr('height', d => ySize(d.size))
+            .attr('fill', '#94a3b8')
+            .attr('opacity', 0.35);
+
+        g.selectAll('.impact-dot')
+            .data(footprint)
+            .enter()
+            .append('circle')
+            .attr('class', 'impact-dot')
+            .attr('cx', d => x(d.rank))
+            .attr('cy', d => yImpact(d.signedImpact))
+            .attr('r', 3.4)
+            .attr('fill', d => d.isBuy ? '#10b981' : '#ef4444')
+            .on('mousemove', (event, d) => {
+                const content = [
+                    `<div class="tooltip-title">Whale Rank #${d.rank}</div>`,
+                    `<div class="tooltip-item"><span class="tooltip-label">Trade Size:</span><span class="tooltip-value">${ui.formatDollar(d.size)}</span></div>`,
+                    `<div class="tooltip-item"><span class="tooltip-label">Signed Impact:</span><span class="tooltip-value">${ui.formatPercent(d.signedImpact, 2)}</span></div>`,
+                    `<div class="tooltip-item"><span class="tooltip-label">Cumulative Impact:</span><span class="tooltip-value">${ui.formatPercent(d.cumulativeSignedImpact, 2)}</span></div>`
+                ].join('');
+                ui.showTooltip(event.pageX, event.pageY, content);
+            })
+            .on('mouseleave', () => ui.hideTooltip());
+
+        const cumLine = d3.line()
+            .x(d => x(d.rank))
+            .y(d => yCum(d.cumulativeSignedImpact))
+            .curve(d3.curveMonotoneX);
+
+        g.append('path')
+            .datum(footprint)
+            .attr('d', cumLine)
+            .attr('fill', 'none')
+            .attr('stroke', '#22d3ee')
+            .attr('stroke-width', 2.5);
+
+        const concentrationCut = Math.max(5, Math.round(footprint.length * 0.2));
+        g.append('line')
+            .attr('x1', x(concentrationCut))
+            .attr('x2', x(concentrationCut))
+            .attr('y1', 0)
+            .attr('y2', chartHeight)
+            .attr('stroke', '#fbbf24')
+            .attr('stroke-width', 1.2)
+            .attr('stroke-dasharray', '5,4');
+
+        g.append('text')
+            .attr('x', x(concentrationCut) + 6)
+            .attr('y', 14)
+            .attr('fill', '#fbbf24')
+            .attr('font-size', '10px')
+            .text('Top 20% Whale Cutoff');
+
+        g.append('g')
+            .attr('transform', `translate(0,${chartHeight})`)
+            .call(d3.axisBottom(x).ticks(8).tickFormat(d => `#${d}`))
+            .attr('color', '#94a3b8');
+
+        g.append('g')
+            .call(d3.axisLeft(yImpact).ticks(6).tickFormat(d => ui.formatPercent(d, 2)))
+            .attr('color', '#94a3b8');
+
+        g.append('g')
+            .attr('transform', `translate(${chartWidth},0)`)
+            .call(d3.axisRight(yCum).ticks(6).tickFormat(d => ui.formatPercent(d, 2)))
+            .attr('color', '#94a3b8');
+
+        g.append('text')
+            .attr('x', chartWidth / 2)
+            .attr('y', chartHeight + 40)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#94a3b8')
+            .attr('font-size', '11px')
+            .text('Whales Ranked by Trade Size');
+
+        g.append('text')
+            .attr('transform', 'rotate(-90)')
+            .attr('x', -chartHeight / 2)
+            .attr('y', -52)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#94a3b8')
+            .attr('font-size', '11px')
+            .text('Signed Price Impact');
+
+        g.append('text')
+            .attr('transform', 'rotate(-90)')
+            .attr('x', -chartHeight / 2)
+            .attr('y', chartWidth + 52)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#22d3ee')
+            .attr('font-size', '11px')
+            .text('Cumulative Signed Impact');
     }
     
     renderImpactChart() {
@@ -632,20 +643,11 @@ export default class WhalesModule {
     }
     
     async update() {
-        // Clean up P5 instance
-        if (this.p5Instance) {
-            this.p5Instance.remove();
-            this.p5Instance = null;
-        }
         this.container.innerHTML = '';
         await this.render();
     }
     
     destroy() {
-        if (this.p5Instance) {
-            this.p5Instance.remove();
-            this.p5Instance = null;
-        }
         this.container.innerHTML = '';
     }
 }

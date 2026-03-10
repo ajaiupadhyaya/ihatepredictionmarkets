@@ -20,6 +20,89 @@ app.get('/health', (req, res) => {
 });
 
 /**
+ * OpenAI-powered text analysis endpoint (server-side key usage only)
+ * POST /api/text-analysis
+ * body: { text: string, context?: string }
+ */
+app.post('/api/text-analysis', async (req, res) => {
+    try {
+        const apiKey = process.env.OPENAI_API_KEY;
+        if (!apiKey) {
+            res.status(400).json({
+                success: false,
+                error: 'OPENAI_API_KEY is not configured on the server environment.'
+            });
+            return;
+        }
+
+        const text = typeof req.body?.text === 'string' ? req.body.text.trim() : '';
+        const context = typeof req.body?.context === 'string' ? req.body.context.trim() : '';
+
+        if (!text) {
+            res.status(400).json({ success: false, error: 'Request body must include non-empty `text`.' });
+            return;
+        }
+
+        const input = [
+            {
+                role: 'system',
+                content: [
+                    {
+                        type: 'text',
+                        text: 'You are a quantitative markets analyst. Return concise JSON with keys: summary, keyClaims, caveats, and suggestedFollowups.'
+                    }
+                ]
+            },
+            {
+                role: 'user',
+                content: [
+                    {
+                        type: 'text',
+                        text: `Context: ${context || 'Prediction market research'}\n\nText to analyze:\n${text}`
+                    }
+                ]
+            }
+        ];
+
+        const response = await fetch('https://api.openai.com/v1/responses', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model: 'gpt-5-mini',
+                input,
+                text: {
+                    format: {
+                        type: 'json_object'
+                    }
+                }
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`OpenAI API error ${response.status}: ${errorText}`);
+        }
+
+        const result = await response.json();
+        const outputText = result?.output_text || '{}';
+        let parsed;
+        try {
+            parsed = JSON.parse(outputText);
+        } catch {
+            parsed = { summary: outputText, keyClaims: [], caveats: [], suggestedFollowups: [] };
+        }
+
+        res.json({ success: true, analysis: parsed });
+    } catch (error) {
+        console.error('[Proxy] text-analysis error:', error.message);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
  * Proxy endpoint for Metaculus
  * Frontend calls: http://localhost:3001/api/metaculus
  * Backend calls: https://www.metaculus.com/api2/questions/...
@@ -30,7 +113,7 @@ app.get('/api/metaculus', async (req, res) => {
         
         // Try different Metaculus endpoints
         const endpoints = [
-            'https://www.metaculus.com/api2/questions/?status=resolved&limit=100',
+            'https://www.metaculus.com/api2/questions/?status=open&limit=100',
             'https://www.metaculus.com/api/v0/questions/?status=resolved&limit=100',
             'https://www.metaculus.com/api/questions/?status=resolved&limit=100'
         ];
@@ -132,8 +215,14 @@ app.get('/api/polymarket', async (req, res) => {
 app.get('/api/kalshi', async (req, res) => {
     try {
         console.log('[Proxy] Fetching Kalshi API...');
-        
-        const endpoint = 'https://api.elections.kalshi.com/trade-api/v2/markets';
+
+        const status = req.query.status;
+        const limit = req.query.limit;
+        const params = new URLSearchParams();
+        if (status) params.set('status', String(status));
+        if (limit) params.set('limit', String(limit));
+
+        const endpoint = `https://api.elections.kalshi.com/trade-api/v2/markets${params.toString() ? `?${params.toString()}` : ''}`;
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -180,6 +269,7 @@ app.listen(PORT, () => {
 ║     /api/metaculus   - Metaculus data  ║
 ║     /api/polymarket  - Polymarket data ║
 ║     /api/kalshi      - Kalshi data     ║
+║     /api/text-analysis - OpenAI text   ║
 ╚════════════════════════════════════════╝
     `);
 });

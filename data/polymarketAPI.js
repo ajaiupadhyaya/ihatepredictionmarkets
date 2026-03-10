@@ -4,41 +4,71 @@
 
 const FETCH_TIMEOUT = 15000; // 15 second timeout
 
+function getEndpointCandidates() {
+    if (typeof window === 'undefined') {
+        return ['http://localhost:3001/api/polymarket'];
+    }
+
+    return ['/api/polymarket', 'http://localhost:3001/api/polymarket'];
+}
+
+function normalizeProxyResult(result) {
+    if (result && typeof result === 'object' && Object.prototype.hasOwnProperty.call(result, 'success')) {
+        if (!result.success) {
+            throw new Error(result.error || 'Proxy request failed');
+        }
+        return result.data;
+    }
+
+    return result;
+}
+
 /**
  * Fetch markets from Polymarket (via backend proxy)
  */
 export async function fetchMarkets() {
     try {
-        console.log('[PM] Polymarket: Fetching from backend proxy...');
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
-        
-        const response = await fetch('http://localhost:3001/api/polymarket', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        console.log('[PM] Response status:', response.status, 'OK:', response.ok);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        console.log('[PM] Polymarket: Fetching live data...');
+
+        let payload = null;
+        let lastError = null;
+        const endpoints = getEndpointCandidates();
+
+        for (const endpoint of endpoints) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+
+                const response = await fetch(endpoint, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    signal: controller.signal
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                payload = normalizeProxyResult(result);
+                console.log('[PM] Data source:', endpoint);
+                break;
+            } catch (error) {
+                lastError = error;
+                console.warn(`[PM] Endpoint failed (${endpoint}):`, error.message);
+            }
         }
-        
-        const result = await response.json();
-        console.log('[PM] Response JSON received, success:', result.success);
-        
-        if (!result.success) {
-            throw new Error(result.error || 'Proxy request failed');
+
+        if (!payload) {
+            throw lastError || new Error('No Polymarket endpoint responded');
         }
-        
+
         // Handle both array and object responses
-        const data = result.data;
+        const data = payload;
         console.log('[PM] Data structure keys:', Object.keys(data || {}));
         const markets = Array.isArray(data) ? data : (data.markets || data.data || []);
         console.log('[PM] Extracted markets count:', markets.length);
@@ -83,18 +113,39 @@ function transformPolymarketData(market) {
     }
     
     const question = market.question || market.description || 'Unknown Market';
+    const tokens = Array.isArray(market.tokens) ? market.tokens : [];
+
+    const yesLike = tokens.find(token => {
+        const outcome = String(token?.outcome || '').toLowerCase();
+        return outcome === 'yes' || outcome === 'true';
+    });
+
+    const primaryToken = yesLike || tokens[0] || null;
+    const primaryPrice = primaryToken && primaryToken.price !== undefined && primaryToken.price !== null
+        ? Number(primaryToken.price)
+        : 0.5;
+
+    const winnerToken = tokens.find(token => token && token.winner === true) || null;
+    const hasWinner = winnerToken !== null;
+    const resolved = market.closed === true && hasWinner;
+    const outcome = resolved && primaryToken
+        ? (primaryToken.winner === true ? 1 : 0)
+        : null;
+
+    const createdAt = market.game_start_time || market.end_date_iso || new Date().toISOString();
+    const resolvedAt = market.end_date_iso || null;
     
     return {
         id: `polymarket_${market.condition_id}`,
         title: question,
         category: categorizeMarket(question),
         platform: 'polymarket',
-        createdAt: market.created_at || market.open_time || new Date().toISOString(),
-        resolvedAt: market.closed && market.end_date_iso ? market.end_date_iso : null,
-        resolved: market.closed === true,
-        outcome: market.outcome ? (market.outcome === 'Yes' ? 1 : 0) : null,
-        currentProbability: market.last_price ? parseFloat(market.last_price) : 0.5,
-        finalProbability: market.closed && market.last_price ? parseFloat(market.last_price) : null,
+        createdAt,
+        resolvedAt,
+        resolved,
+        outcome,
+        currentProbability: Number.isFinite(primaryPrice) ? primaryPrice : 0.5,
+        finalProbability: resolved ? (Number.isFinite(primaryPrice) ? primaryPrice : null) : null,
         volume: market.volume ? parseFloat(market.volume) : 0,
         liquidity: market.liquidity ? parseFloat(market.liquidity) : 0,
         traders: market.participants || 0,

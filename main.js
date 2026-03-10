@@ -3,10 +3,12 @@ import { state } from './state.js';
 import { initializeData } from './data/dataManager.js';
 import { updateStatusBar } from './utils/ui.js';
 import { EvaluationOrchestrator } from './evaluation/index.js';
+import { enhanceQuantCharts, setupQuantVisualUpgrade } from './utils/quantVisualUpgrade.js';
 
 // Lazy module registry
 const moduleLoaders = {
     'home': () => import('./modules/home/index.js').then(m => m.default),
+    'research-report': () => import('./modules/research-report/index.js').then(m => m.default),
     'bet-analyzer': () => import('./modules/bet-analyzer/index.js').then(m => m.default),
     'calibration': () => import('./modules/calibration/index.js').then(m => m.default),
     'crowd-wisdom': () => import('./modules/crowd-wisdom/index.js').then(m => m.default),
@@ -94,9 +96,11 @@ async function init() {
         setupNavigation();
         setupGlobalControls();
         setupKeyboardNavigation();
+        setupQuantVisualUpgrade();
         
         // Initialize data layer
         await initializeData();
+        populateFocusMarketSelector();
         
         // Initialize evaluation framework only if we have data
         try {
@@ -141,6 +145,35 @@ async function init() {
             `;
         }
     }
+}
+
+function truncateLabel(text, max = 72) {
+    if (!text) return 'Untitled market';
+    return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function populateFocusMarketSelector() {
+    const selector = document.getElementById('focus-market');
+    if (!selector) return;
+
+    const previous = selector.value || state.filters.focusMarketId || 'all';
+    selector.innerHTML = '<option value="all">All Markets</option>';
+
+    const markets = [...(state.markets || [])]
+        .filter(market => market && market.id)
+        .sort((left, right) => Number(right.volume || 0) - Number(left.volume || 0))
+        .slice(0, 300);
+
+    markets.forEach(market => {
+        const option = document.createElement('option');
+        option.value = market.id;
+        option.textContent = `${truncateLabel(market.title)} (${market.platform || 'unknown'})`;
+        selector.appendChild(option);
+    });
+
+    const exists = Array.from(selector.options).some(option => option.value === previous);
+    selector.value = exists ? previous : 'all';
+    state.filters.focusMarketId = selector.value;
 }
 
 // Navigation
@@ -209,6 +242,7 @@ async function loadModule(moduleId) {
         // Create and render new module
         currentModule = new ModuleClass(container, state);
         await currentModule.render();
+        enhanceQuantCharts(container);
 
         const loadMs = performance.now() - startedAt;
         navTelemetry.moduleLoads++;
@@ -253,6 +287,7 @@ function setupGlobalControls() {
     
     dateStart.addEventListener('change', () => {
         state.filters.dateRange.start = new Date(dateStart.value);
+        populateFocusMarketSelector();
         if (currentModule && currentModule.update) {
             currentModule.update();
         }
@@ -260,6 +295,7 @@ function setupGlobalControls() {
     
     dateEnd.addEventListener('change', () => {
         state.filters.dateRange.end = new Date(dateEnd.value);
+        populateFocusMarketSelector();
         if (currentModule && currentModule.update) {
             currentModule.update();
         }
@@ -270,6 +306,7 @@ function setupGlobalControls() {
     if (platformSelector) {
         platformSelector.addEventListener('change', (e) => {
             state.filters.platform = e.target.value;
+            populateFocusMarketSelector();
             if (currentModule && currentModule.update) {
                 currentModule.update();
             }
@@ -281,6 +318,17 @@ function setupGlobalControls() {
     if (categoryFilter) {
         categoryFilter.addEventListener('change', (e) => {
             state.filters.category = e.target.value;
+            populateFocusMarketSelector();
+            if (currentModule && currentModule.update) {
+                currentModule.update();
+            }
+        });
+    }
+
+    const focusMarket = document.getElementById('focus-market');
+    if (focusMarket) {
+        focusMarket.addEventListener('change', (e) => {
+            state.filters.focusMarketId = e.target.value;
             if (currentModule && currentModule.update) {
                 currentModule.update();
             }

@@ -18,9 +18,16 @@ export default class ArbitrageModule {
         this.data = await getModuleData('arbitrage');
         
         if (!this.data || !this.data.markets || this.data.markets.length === 0) {
-            this.container.innerHTML = '<div class="error-card"><div class="error-title">No Data Available</div></div>';
+            this.container.innerHTML = `
+                <div class="card p-6">
+                    <div class="card-title mb-2">Arbitrage Network Needs Broader Overlap</div>
+                    <p class="text-slate-400 text-sm leading-relaxed">No sufficiently connected market set is available for this scope yet. Switch Focus Bet to "All Markets" and broaden filters to reveal cross-market structure.</p>
+                </div>
+            `;
             return;
         }
+
+        const brief = this.buildInvestigativeBrief();
         
         // Build UI
         this.container.innerHTML = `
@@ -28,6 +35,33 @@ export default class ArbitrageModule {
                 <div class="mb-8">
                     <h2 class="text-3xl font-bold text-cyan-400 mb-2">Cross-Market Arbitrage & Correlations</h2>
                     <p class="text-slate-400">Mapping relationships and arbitrage gaps between related markets</p>
+                </div>
+
+                <div class="card mb-6">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Investigative Brief</div>
+                            <div class="card-subtitle">Question-first framing for cross-market structure</div>
+                        </div>
+                    </div>
+                    <div class="p-6 grid grid-cols-2 gap-4">
+                        <div class="stat-card">
+                            <div class="stat-label">Question</div>
+                            <div class="text-sm text-slate-300 leading-relaxed">${brief.question}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Evidence</div>
+                            <div class="text-sm text-slate-300 leading-relaxed">${brief.evidence}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Uncertainty</div>
+                            <div class="text-sm text-slate-300 leading-relaxed">${brief.uncertainty}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Implication</div>
+                            <div class="text-sm text-slate-300 leading-relaxed">${brief.implication}</div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="grid grid-cols-1 gap-6 mb-6">
@@ -78,6 +112,46 @@ export default class ArbitrageModule {
         this.renderArbitrageList();
         this.renderStats();
         this.renderMethodology();
+    }
+
+    buildInvestigativeBrief() {
+        const markets = Array.isArray(this.data?.markets) ? this.data.markets : [];
+        const opportunities = this.getArbitrageOpportunities();
+        const quality = this.state?.dataQuality || {};
+        const confidencePct = Math.round(Number(quality.confidence || 0) * 100);
+        const coveragePct = Math.round(Number(quality.coverage || 0) * 100);
+
+        const avgSpread = opportunities.length > 0
+            ? opportunities.reduce((sum, item) => sum + Number(item.spread || 0), 0) / opportunities.length
+            : 0;
+        const maxSpread = opportunities.length > 0
+            ? Math.max(...opportunities.map(item => Number(item.spread || 0)))
+            : 0;
+
+        const question = 'Are related markets internally consistent, or do cross-platform pricing gaps reveal exploitable inefficiencies?';
+        const evidence = `Analyzed ${markets.length} markets with ${opportunities.length} active spread opportunities; average spread ${(avgSpread * 100).toFixed(2)} points, max ${(maxSpread * 100).toFixed(2)} points.`;
+        const uncertainty = `Data confidence is ${confidencePct}% with ${coveragePct}% coverage; sparse overlap and asynchronous updates can mimic arbitrage.`;
+        const implication = 'Prioritize persistent, repeated spreads across independent sources before treating violations as true structural mispricing.';
+
+        return { question, evidence, uncertainty, implication };
+    }
+
+    getArbitrageOpportunities() {
+        if (Array.isArray(this.data?.arbitrageOpps) && this.data.arbitrageOpps.length > 0) {
+            return this.data.arbitrageOpps;
+        }
+
+        if (!Array.isArray(this.data?.opportunities)) {
+            return [];
+        }
+
+        return this.data.opportunities.map((opportunity, idx) => ({
+            id: opportunity.id || `live_opp_${idx}`,
+            description: `${opportunity.category || 'market'} | ${opportunity.pair || 'cross-source spread'}`,
+            priceA: Number(opportunity.leftProbability || 0),
+            priceB: Number(opportunity.rightProbability || 0),
+            profitPotential: Number(opportunity.spread || 0)
+        }));
     }
     
     renderNetworkGraph() {
@@ -393,7 +467,7 @@ export default class ArbitrageModule {
         const container = document.getElementById('arbitrage-list');
         
         // Find arbitrage opportunities
-        const opportunities = this.data.arbitrageOpps || [];
+        const opportunities = this.getArbitrageOpportunities();
         
         if (opportunities.length === 0) {
             container.innerHTML = '<div class="text-slate-400 text-sm">No current arbitrage opportunities detected</div>';
@@ -440,6 +514,10 @@ export default class ArbitrageModule {
     
     renderStats() {
         const markets = this.data.markets;
+        const opportunities = this.getArbitrageOpportunities();
+        const dataMode = this.state?.dataQuality?.mode || 'unknown';
+        const dataConfidence = Number(this.state?.dataQuality?.confidence || 0);
+        const dataCoverage = Number(this.state?.dataQuality?.coverage || 0);
         
         // Calculate network statistics
         let totalCorrelations = 0;
@@ -475,10 +553,13 @@ export default class ArbitrageModule {
             'Avg Correlation': ui.formatNumber(avgCorrelation, 3),
             'Positive Correlations': positiveCorrs,
             'Strong Correlations (|r|>0.5)': strongCorrs,
-            'Arbitrage Opportunities': this.data.arbitrageOpps?.length || 0,
+            'Arbitrage Opportunities': opportunities.length,
             'Network Density': count > 0 ? ui.formatPercent(strongCorrs / count) : '0%',
-            'Avg Profit Potential': this.data.arbitrageOpps?.length > 0 ? 
-                ui.formatPercent(stats.mean(this.data.arbitrageOpps.map(o => o.profitPotential))) : '0%'
+            'Avg Profit Potential': opportunities.length > 0 ? 
+                ui.formatPercent(stats.mean(opportunities.map(o => o.profitPotential))) : '0%',
+            'Data Mode': dataMode,
+            'Data Confidence': ui.formatPercent(dataConfidence, 0),
+            'Data Coverage': ui.formatPercent(dataCoverage, 0)
         };
         
         const statsPanel = document.getElementById('stats-panel');

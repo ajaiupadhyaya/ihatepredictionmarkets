@@ -15,8 +15,17 @@ export default class CalibrationModule {
         // Fetch data
         this.data = await getModuleData('calibration');
         
+        console.log('[CAL] Render called. this.data:', this.data);
+        console.log('[CAL] this.data.markets:', this.data?.markets?.length);
+        
         if (!this.data || this.data.markets.length === 0) {
-            this.container.innerHTML = '<div class="error-card"><div class="error-title">No Data Available</div></div>';
+            console.error('[CAL] ❌ No data to display. state.markets check:', this.state?.markets?.length);
+            this.container.innerHTML = `
+                <div class="card p-6">
+                    <div class="card-title mb-2">Calibration Needs Resolved Outcomes</div>
+                    <p class="text-slate-400 text-sm leading-relaxed">The current selection does not include markets with known outcomes. Try switching Focus Bet to "All Markets" or broadening category/platform filters to view calibration diagnostics.</p>
+                </div>
+            `;
             return;
         }
         

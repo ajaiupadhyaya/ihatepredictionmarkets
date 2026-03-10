@@ -3,14 +3,12 @@ import * as d3 from 'd3';
 import * as stats from '../../stats/index.js';
 import * as ui from '../../utils/ui.js';
 import { getModuleData } from '../../data/dataManager.js';
-import p5 from 'p5';
 
 export default class TemporalModule {
     constructor(container, state) {
         this.container = container;
         this.state = state;
         this.data = null;
-        this.p5Instance = null;
     }
     
     async render() {
@@ -18,7 +16,12 @@ export default class TemporalModule {
         this.data = await getModuleData('temporal');
         
         if (!this.data || !this.data.markets) {
-            this.container.innerHTML = '<div class="error-card"><div class="error-title">No Data Available</div></div>';
+            this.container.innerHTML = `
+                <div class="card p-6">
+                    <div class="card-title mb-2">Temporal View Needs Time-Series Paths</div>
+                    <p class="text-slate-400 text-sm leading-relaxed">No usable probability paths were found for this scope. Select a broader filter range to render temporal decay and volatility structure.</p>
+                </div>
+            `;
             return;
         }
         
@@ -34,11 +37,11 @@ export default class TemporalModule {
                     <div class="card">
                         <div class="card-header">
                             <div>
-                                <div class="card-title">Probability Path Simulation</div>
-                                <div class="card-subtitle">P5.js SDE visualization</div>
+                                <div class="card-title">Volatility Cone</div>
+                                <div class="card-subtitle">Forward uncertainty quantiles by horizon</div>
                             </div>
                         </div>
-                        <div id="path-sim" style="height: 400px;"></div>
+                        <div id="path-sim" class="chart-container"></div>
                     </div>
                     
                     <div class="card">
@@ -92,128 +95,156 @@ export default class TemporalModule {
     }
     
     renderPathSimulation() {
-        const containerEl = document.getElementById('path-sim');
-        const width = containerEl.clientWidth;
+        const container = d3.select('#path-sim');
+        const width = container.node().clientWidth;
         const height = 400;
-        
-        const sketch = (p) => {
-            let paths = [];
-            const nPaths = 20;
-            const nSteps = 200;
-            const dt = 1.0;
-            const sigma = 0.015; // Volatility
-            
-            class Path {
-                constructor(startProb, color) {
-                    this.points = [];
-                    this.color = color;
-                    this.alpha = 200;
-                    
-                    // Initialize with logit transform
-                    let logit = Math.log(startProb / (1 - startProb));
-                    
-                    // Generate path using Brownian motion in logit space
-                    for (let i = 0; i < nSteps; i++) {
-                        // Add noise
-                        logit += p.randomGaussian(0, sigma * Math.sqrt(dt));
-                        
-                        // Transform back to probability
-                        const prob = 1 / (1 + Math.exp(-logit));
-                        
-                        this.points.push({
-                            x: p.map(i, 0, nSteps - 1, 50, width - 50),
-                            y: p.map(prob, 0, 1, height - 50, 50),
-                            prob: prob
-                        });
-                    }
+        const margin = { top: 20, right: 30, bottom: 50, left: 60 };
+
+        const svg = container.append('svg')
+            .attr('width', width)
+            .attr('height', height);
+
+        const g = svg.append('g')
+            .attr('transform', `translate(${margin.left},${margin.top})`);
+
+        const chartWidth = width - margin.left - margin.right;
+        const chartHeight = height - margin.top - margin.bottom;
+
+        const markets = this.data.markets || [];
+        const horizons = [];
+
+        markets.forEach((market) => {
+            const history = Array.isArray(market.priceHistory) ? market.priceHistory : [];
+            if (history.length < 8) return;
+
+            for (let i = 1; i < history.length; i++) {
+                const lookback = Math.min(i, 12);
+                const returns = [];
+                for (let j = i - lookback + 1; j <= i; j++) {
+                    if (j <= 0) continue;
+                    returns.push((history[j].price || 0) - (history[j - 1].price || 0));
                 }
-                
-                display() {
-                    p.noFill();
-                    p.stroke(this.color.r, this.color.g, this.color.b, this.alpha);
-                    p.strokeWeight(1.5);
-                    
-                    p.beginShape();
-                    for (let pt of this.points) {
-                        p.vertex(pt.x, pt.y);
-                    }
-                    p.endShape();
-                    
-                    // Draw end point
-                    const last = this.points[this.points.length - 1];
-                    p.noStroke();
-                    p.fill(this.color.r, this.color.g, this.color.b, this.alpha);
-                    p.ellipse(last.x, last.y, 4);
-                }
+
+                if (returns.length < 4) continue;
+                const vol = stats.standardDeviation(returns);
+                if (!Number.isFinite(vol)) continue;
+
+                const horizon = Math.max(1, history.length - i);
+                horizons.push({ horizon, vol });
             }
-            
-            p.setup = () => {
-                p.createCanvas(width, height);
-                p.background(15, 23, 42);
-                
-                // Generate paths with different starting points
-                for (let i = 0; i < nPaths; i++) {
-                    const startProb = p.random(0.3, 0.7);
-                    const hue = p.map(startProb, 0.3, 0.7, 220, 180);
-                    paths.push(new Path(startProb, {
-                        r: 34,
-                        g: 211,
-                        b: 238
-                    }));
-                }
-            };
-            
-            p.draw = () => {
-                p.background(15, 23, 42);
-                
-                // Draw grid lines
-                p.stroke(60, 60, 80, 50);
-                p.strokeWeight(1);
-                for (let i = 0; i <= 4; i++) {
-                    const y = p.map(i / 4, 0, 1, height - 50, 50);
-                    p.line(50, y, width - 50, y);
-                    
-                    // Labels
-                    p.noStroke();
-                    p.fill(148, 163, 184);
-                    p.textAlign(p.RIGHT, p.CENTER);
-                    p.textSize(10);
-                    p.text((i * 25) + '%', 45, y);
-                }
-                
-                // Draw paths
-                for (let path of paths) {
-                    path.display();
-                }
-                
-                // Axes
-                p.stroke(100, 100, 100);
-                p.strokeWeight(2);
-                p.line(50, height - 50, width - 50, height - 50); // x-axis
-                p.line(50, 50, 50, height - 50); // y-axis
-                
-                // Labels
-                p.noStroke();
-                p.fill(148, 163, 184);
-                p.textAlign(p.CENTER);
-                p.textSize(12);
-                p.text('Time to Resolution →', width / 2, height - 20);
-                
-                p.push();
-                p.translate(20, height / 2);
-                p.rotate(-p.HALF_PI);
-                p.text('Probability', 0, 0);
-                p.pop();
-                
-                // Title
-                p.fill(148, 163, 184);
-                p.textAlign(p.LEFT);
-                p.textSize(11);
-                p.text('Simulated Brownian paths (logit-normal)', 60, 30);
-            };
-        };
-        
-        this.p5Instance = new p5(sketch, containerEl);
+        });
+
+        if (horizons.length < 15) {
+            container.html('<div class="text-slate-400 p-4">Insufficient temporal depth to build volatility cone</div>');
+            return;
+        }
+
+        const grouped = d3.group(horizons, d => Math.min(30, Math.ceil(d.horizon / 2) * 2));
+        const coneData = Array.from(grouped.entries())
+            .map(([horizon, points]) => {
+                const vols = points.map(p => p.vol).sort((a, b) => a - b);
+                if (vols.length < 5) return null;
+
+                const q = (p) => d3.quantile(vols, p) || 0;
+                return {
+                    horizon,
+                    q10: q(0.10),
+                    q25: q(0.25),
+                    median: q(0.50),
+                    q75: q(0.75),
+                    q90: q(0.90)
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.horizon - b.horizon);
+
+        if (coneData.length < 4) {
+            container.html('<div class="text-slate-400 p-4">Cone quantiles are unstable for this scope</div>');
+            return;
+        }
+
+        const x = d3.scaleLinear()
+            .domain(d3.extent(coneData, d => d.horizon))
+            .range([0, chartWidth]);
+
+        const y = d3.scaleLinear()
+            .domain([0, d3.max(coneData, d => d.q90) * 1.15])
+            .nice()
+            .range([chartHeight, 0]);
+
+        const bandOuter = d3.area()
+            .x(d => x(d.horizon))
+            .y0(d => y(d.q10))
+            .y1(d => y(d.q90))
+            .curve(d3.curveMonotoneX);
+
+        const bandInner = d3.area()
+            .x(d => x(d.horizon))
+            .y0(d => y(d.q25))
+            .y1(d => y(d.q75))
+            .curve(d3.curveMonotoneX);
+
+        const medianLine = d3.line()
+            .x(d => x(d.horizon))
+            .y(d => y(d.median))
+            .curve(d3.curveMonotoneX);
+
+        g.append('path')
+            .datum(coneData)
+            .attr('d', bandOuter)
+            .attr('fill', '#22d3ee')
+            .attr('opacity', 0.16);
+
+        g.append('path')
+            .datum(coneData)
+            .attr('d', bandInner)
+            .attr('fill', '#22d3ee')
+            .attr('opacity', 0.32);
+
+        g.append('path')
+            .datum(coneData)
+            .attr('d', medianLine)
+            .attr('fill', 'none')
+            .attr('stroke', '#fbbf24')
+            .attr('stroke-width', 2.7);
+
+        const nearTerm = coneData[0];
+        const farTerm = coneData[coneData.length - 1];
+        const coneSteepening = ((nearTerm.median - farTerm.median) / (farTerm.median || 1)) * 100;
+
+        g.append('text')
+            .attr('x', chartWidth - 8)
+            .attr('y', 18)
+            .attr('text-anchor', 'end')
+            .attr('fill', '#fbbf24')
+            .attr('font-size', '10px')
+            .text(`Near/Far median vol spread: ${ui.formatNumber(coneSteepening, 1)}%`);
+
+        g.append('g')
+            .attr('transform', `translate(0,${chartHeight})`)
+            .call(d3.axisBottom(x).ticks(8))
+            .attr('color', '#94a3b8');
+
+        g.append('g')
+            .call(d3.axisLeft(y).ticks(7).tickFormat(d => ui.formatPercent(d, 2)))
+            .attr('color', '#94a3b8');
+
+        g.append('text')
+            .attr('x', chartWidth / 2)
+            .attr('y', chartHeight + 42)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#94a3b8')
+            .attr('font-size', '11px')
+            .text('Time to Resolution (bucketed horizon)');
+
+        g.append('text')
+            .attr('transform', 'rotate(-90)')
+            .attr('x', -chartHeight / 2)
+            .attr('y', -44)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#94a3b8')
+            .attr('font-size', '11px')
+            .text('Realized Volatility');
     }
     
     renderSpaghettiChart() {
@@ -666,20 +697,11 @@ export default class TemporalModule {
     }
     
     async update() {
-        // Clean up P5 instance
-        if (this.p5Instance) {
-            this.p5Instance.remove();
-            this.p5Instance = null;
-        }
         this.container.innerHTML = '';
         await this.render();
     }
     
     destroy() {
-        if (this.p5Instance) {
-            this.p5Instance.remove();
-            this.p5Instance = null;
-        }
         this.container.innerHTML = '';
     }
 }

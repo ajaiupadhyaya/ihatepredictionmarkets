@@ -3,7 +3,24 @@ import { defineConfig } from 'vite';
 export default defineConfig({
   server: {
     port: 5173,
-    open: true
+    open: true,
+    proxy: {
+      '/api/polymarket': {
+        target: 'https://clob.polymarket.com',
+        changeOrigin: true,
+        rewrite: () => '/markets'
+      },
+      '/api/kalshi': {
+        target: 'https://api.elections.kalshi.com',
+        changeOrigin: true,
+        rewrite: () => '/trade-api/v2/markets'
+      },
+      '/api/metaculus': {
+        target: 'https://www.metaculus.com',
+        changeOrigin: true,
+        rewrite: () => '/api2/questions/?status=open&limit=100'
+      }
+    }
   },
   build: {
     target: 'es2015',

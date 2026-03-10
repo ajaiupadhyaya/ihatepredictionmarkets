@@ -2,7 +2,7 @@
 import * as d3 from 'd3';
 import * as stats from '../../stats/index.js';
 import * as ui from '../../utils/ui.js';
-import { getModuleData } from '../../data/dataManager';
+import { getModuleData } from '../../data/dataManager.js';
 
 export default class LiquidityModule {
     constructor(container, state) {
@@ -16,7 +16,12 @@ export default class LiquidityModule {
         this.data = await getModuleData('liquidity');
         
         if (!this.data || !this.data.markets || this.data.markets.length === 0) {
-            this.container.innerHTML = '<div class="error-card"><div class="error-title">No Data Available</div></div>';
+            this.container.innerHTML = `
+                <div class="card p-6">
+                    <div class="card-title mb-2">Liquidity View Has No Markets in Scope</div>
+                    <p class="text-slate-400 text-sm leading-relaxed">Current filters returned no markets. Reset Focus Bet to "All Markets" or adjust platform/category filters.</p>
+                </div>
+            `;
             return;
         }
         
@@ -144,6 +149,30 @@ export default class LiquidityModule {
         
         const colorScale = d3.scaleSequential(d3.interpolateViridis)
             .domain([0, d3.max(heatmapData, d => Math.log(d.volume + 1))]);
+
+        const totalHeatmapVolume = d3.sum(heatmapData, d => d.volume);
+        const hottestCell = heatmapData.reduce((best, current) => current.volume > best.volume ? current : best, heatmapData[0]);
+
+        const containerNode = container.node();
+        let contextNote = containerNode.querySelector('.liquidity-context-note');
+        if (!contextNote) {
+            contextNote = document.createElement('div');
+            contextNote.className = 'liquidity-context-note';
+            containerNode.appendChild(contextNote);
+        }
+
+        const updateContextNote = (cell) => {
+            const share = totalHeatmapVolume > 0 ? cell.volume / totalHeatmapVolume : 0;
+            contextNote.innerHTML = `
+                <strong>Context:</strong>
+                <span>${cell.category} × ${cell.platform}</span>
+                <span>Share ${ui.formatPercent(share, 1)}</span>
+                <span>Depth ${ui.formatNumber(cell.liquidity, 3)}</span>
+                <span>λ ${ui.formatNumber(cell.kyleLambda, 5)}</span>
+            `;
+        };
+
+        updateContextNote(hottestCell);
         
         // Cells
         const cells = g.selectAll('rect')
@@ -159,6 +188,10 @@ export default class LiquidityModule {
             .attr('stroke-width', 1)
             .attr('opacity', 0)
             .style('cursor', 'pointer');
+
+        cells.filter(d => d.category === hottestCell.category && d.platform === hottestCell.platform)
+            .attr('stroke', '#fbbf24')
+            .attr('stroke-width', 2.2);
         
         // Animate
         cells.transition()
@@ -188,9 +221,18 @@ export default class LiquidityModule {
                 </div>
             `;
             ui.showTooltip(event.pageX, event.pageY, content);
+            updateContextNote(d);
         })
         .on('mouseout', () => {
             ui.hideTooltip();
+            updateContextNote(hottestCell);
+        })
+        .on('click', (event, d) => {
+            cells.attr('stroke', '#0f172a').attr('stroke-width', 1);
+            d3.select(event.currentTarget)
+                .attr('stroke', '#fbbf24')
+                .attr('stroke-width', 2.2);
+            updateContextNote(d);
         });
         
         // Axes
@@ -279,6 +321,10 @@ export default class LiquidityModule {
         // Calculate Lorenz curve
         const volumes = this.data.markets.map(m => m.volume || 0).sort(d3.ascending);
         const totalVolume = d3.sum(volumes);
+        const topCount = Math.max(1, Math.floor(volumes.length * 0.1));
+        const topShare = totalVolume > 0
+            ? volumes.slice(-topCount).reduce((sum, value) => sum + value, 0) / totalVolume
+            : 0;
         
         const lorenzData = [{ x: 0, y: 0 }];
         let cumVolume = 0;
@@ -393,6 +439,14 @@ export default class LiquidityModule {
             .attr('font-size', '16px')
             .attr('font-weight', 'bold')
             .text(`Gini = ${ui.formatNumber(gini, 3)}`);
+
+        g.append('text')
+            .attr('x', chartWidth / 2)
+            .attr('y', chartHeight / 2 + 20)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#fbbf24')
+            .attr('font-size', '11px')
+            .text(`Top 10% markets control ${ui.formatPercent(topShare, 1)} of notional volume`);
     }
     
     renderImpactChart() {

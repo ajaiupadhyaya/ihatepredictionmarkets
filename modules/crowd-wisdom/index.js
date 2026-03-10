@@ -16,9 +16,16 @@ export default class CrowdWisdomModule {
         this.data = await getModuleData('crowd-wisdom');
         
         if (!this.data || !this.data.events || this.data.events.length === 0) {
-            this.container.innerHTML = '<div class="error-card"><div class="error-title">No Data Available</div></div>';
+            this.container.innerHTML = `
+                <div class="card p-6">
+                    <div class="card-title mb-2">Cross-Source Overlap Is Limited</div>
+                    <p class="text-slate-400 text-sm leading-relaxed">No matching timeline overlap was found for the current selection. Try setting Focus Bet to "All Markets" or broadening platform/category filters.</p>
+                </div>
+            `;
             return;
         }
+
+        const brief = this.buildInvestigativeBrief();
         
         // Build UI
         this.container.innerHTML = `
@@ -26,6 +33,33 @@ export default class CrowdWisdomModule {
                 <div class="mb-8">
                     <h2 class="text-3xl font-bold text-cyan-400 mb-2">Crowd Wisdom vs. Expert Forecasters</h2>
                     <p class="text-slate-400">Comparing market probabilities against expert/model forecasts over time</p>
+                </div>
+
+                <div class="card mb-6">
+                    <div class="card-header">
+                        <div>
+                            <div class="card-title">Investigative Brief</div>
+                            <div class="card-subtitle">Question-first framing for the evidence below</div>
+                        </div>
+                    </div>
+                    <div class="p-6 grid grid-cols-2 gap-4">
+                        <div class="stat-card">
+                            <div class="stat-label">Question</div>
+                            <div class="text-sm text-slate-300 leading-relaxed">${brief.question}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Evidence</div>
+                            <div class="text-sm text-slate-300 leading-relaxed">${brief.evidence}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Uncertainty</div>
+                            <div class="text-sm text-slate-300 leading-relaxed">${brief.uncertainty}</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Implication</div>
+                            <div class="text-sm text-slate-300 leading-relaxed">${brief.implication}</div>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="grid grid-cols-1 gap-6 mb-6">
@@ -76,6 +110,39 @@ export default class CrowdWisdomModule {
         this.renderQuadrantChart();
         this.renderStats();
         this.renderMethodology();
+    }
+
+    buildInvestigativeBrief() {
+        const events = Array.isArray(this.data?.events) ? this.data.events : [];
+        const resolvedEvents = events.filter(event => event.outcome === 0 || event.outcome === 1);
+        const quality = this.state?.dataQuality || {};
+        const confidencePct = Math.round(Number(quality.confidence || 0) * 100);
+        const coveragePct = Math.round(Number(quality.coverage || 0) * 100);
+
+        const divergences = [];
+        for (const event of events) {
+            const market = event.marketProbabilities || [];
+            const expert = event.expertProbabilities || [];
+            const n = Math.min(market.length, expert.length);
+            if (n < 2) continue;
+
+            for (let i = 0; i < n; i++) {
+                divergences.push(Math.abs(Number(market[i].price) - Number(expert[i].price)));
+            }
+        }
+
+        const avgDivergence = divergences.length > 0
+            ? divergences.reduce((sum, value) => sum + value, 0) / divergences.length
+            : null;
+
+        const question = 'Do market prices lead expert consensus before key outcomes, or mostly follow already-visible narratives?';
+        const evidence = avgDivergence === null
+            ? `Loaded ${events.length} cross-source event threads with limited overlap depth.`
+            : `Loaded ${events.length} cross-source event threads (${resolvedEvents.length} resolved) with mean market-expert divergence of ${(avgDivergence * 100).toFixed(1)} points.`;
+        const uncertainty = `Data confidence is ${confidencePct}% with ${coveragePct}% coverage; sparse overlap can blur true lead-lag dynamics.`;
+        const implication = 'Prioritize events with sustained divergence and subsequent resolution to identify where markets add independent signal over expert consensus.';
+
+        return { question, evidence, uncertainty, implication };
     }
     
     renderTimelineChart() {
@@ -523,6 +590,9 @@ export default class CrowdWisdomModule {
     renderStats() {
         // Calculate statistics
         const allEvents = this.data.events.filter(e => e.outcome !== null);
+        const dataMode = this.state?.dataQuality?.mode || 'unknown';
+        const dataConfidence = Number(this.state?.dataQuality?.confidence || 0);
+        const dataCoverage = Number(this.state?.dataQuality?.coverage || 0);
 
         if (allEvents.length < 2) {
             const statsPanel = document.getElementById('stats-panel');
@@ -534,7 +604,10 @@ export default class CrowdWisdomModule {
                 'Expert Brier Score': 'N/A',
                 'Winner': 'N/A',
                 'Events Analyzed': allEvents.length,
-                'Avg Divergence': 'N/A'
+                'Avg Divergence': 'N/A',
+                'Data Mode': dataMode,
+                'Data Confidence': ui.formatPercent(dataConfidence, 0),
+                'Data Coverage': ui.formatPercent(dataCoverage, 0)
             }));
             return;
         }
@@ -564,7 +637,10 @@ export default class CrowdWisdomModule {
             'Expert Brier Score': ui.formatNumber(expertBrier, 4),
             'Winner': marketBrier < expertBrier ? 'Market' : 'Expert',
             'Events Analyzed': allEvents.length,
-            'Avg Divergence': ui.formatPercent(stats.mean(marketFinals.map((m, i) => Math.abs(m - expertFinals[i]))))
+            'Avg Divergence': ui.formatPercent(stats.mean(marketFinals.map((m, i) => Math.abs(m - expertFinals[i])))),
+            'Data Mode': dataMode,
+            'Data Confidence': ui.formatPercent(dataConfidence, 0),
+            'Data Coverage': ui.formatPercent(dataCoverage, 0)
         };
         
         const statsPanel = document.getElementById('stats-panel');

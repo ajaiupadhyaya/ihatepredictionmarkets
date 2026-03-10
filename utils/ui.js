@@ -8,9 +8,25 @@ export function updateStatusBar() {
     // Update timestamp
     const lastUpdatedEl = document.getElementById('last-updated');
     if (lastUpdatedEl && state.lastUpdate) {
-        const now = new Date();
-        const time = now.toLocaleTimeString();
+        const time = new Date(state.lastUpdate).toLocaleTimeString();
         lastUpdatedEl.textContent = time;
+    }
+
+    const modeEl = document.getElementById('data-mode');
+    if (modeEl) {
+        modeEl.textContent = state.dataQuality?.mode || 'unknown';
+    }
+
+    const confidenceEl = document.getElementById('data-confidence');
+    if (confidenceEl) {
+        const confidence = Number(state.dataQuality?.confidence || 0);
+        confidenceEl.textContent = `${(confidence * 100).toFixed(0)}%`;
+    }
+
+    const coverageEl = document.getElementById('data-coverage');
+    if (coverageEl) {
+        const coverage = Number(state.dataQuality?.coverage || 0);
+        coverageEl.textContent = `${(coverage * 100).toFixed(0)}%`;
     }
     
     // Update API status indicators

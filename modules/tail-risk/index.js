@@ -16,7 +16,12 @@ export default class TailRiskModule {
         this.data = await getModuleData('tail-risk');
         
         if (!this.data || !this.data.markets || this.data.markets.length === 0) {
-            this.container.innerHTML = '<div class="error-card"><div class="error-title">No Data Available</div></div>';
+            this.container.innerHTML = `
+                <div class="card p-6">
+                    <div class="card-title mb-2">Tail-Risk View Is Waiting on Resolutions</div>
+                    <p class="text-slate-400 text-sm leading-relaxed">Favorite-longshot diagnostics require resolved markets with outcomes. Broaden filters or switch Focus Bet to "All Markets" to include more settled events.</p>
+                </div>
+            `;
             return;
         }
         

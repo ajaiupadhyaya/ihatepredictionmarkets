@@ -16,9 +16,14 @@ export default class LeaderboardModule {
     async render() {
         // Fetch data
         this.data = await getModuleData('leaderboard');
-        
-        if (!this.data || !this.data.forecasters || this.data.forecasters.length === 0) {
-            this.container.innerHTML = '<div class="error-card"><div class="error-title">No Data Available</div></div>';
+
+        if (!this.data) {
+            this.container.innerHTML = `
+                <div class="card p-6">
+                    <div class="card-title mb-2">Leaderboard Feed Unavailable</div>
+                    <p class="text-slate-400 text-sm leading-relaxed">Scoring requires market outcomes and source probabilities. Refresh data or widen your current filters to populate this view.</p>
+                </div>
+            `;
             return;
         }
         
@@ -82,6 +87,11 @@ export default class LeaderboardModule {
     
     renderLeaderboardTable() {
         const container = document.getElementById('leaderboard-table');
+
+        if (!this.data.forecasters || this.data.forecasters.length === 0) {
+            container.innerHTML = '<div class="text-slate-400">No resolved outcomes with explicit results yet for live scoring.</div>';
+            return;
+        }
         
         // Sort forecasters
         const sorted = [...this.data.forecasters].sort((a, b) => {
@@ -133,7 +143,7 @@ export default class LeaderboardModule {
             row.innerHTML = `
                 <td class="py-3 px-4 font-mono font-bold" style="color: ${rankColor};">${rankBadge}</td>
                 <td class="py-3 px-4 text-cyan-400 font-semibold">${forecaster.name}</td>
-                <td class="py-3 px-4 text-center font-mono text-slate-300">${forecaster.predictions}</td>
+                <td class="py-3 px-4 text-center font-mono text-slate-300">${forecaster.predictions ?? forecaster.predictionCount ?? 0}</td>
                 <td class="py-3 px-4 text-center font-mono ${forecaster.brierScore < 0.2 ? 'text-green-400' : forecaster.brierScore > 0.3 ? 'text-red-400' : 'text-slate-300'}">${ui.formatNumber(forecaster.brierScore, 4)}</td>
                 <td class="py-3 px-4 text-center font-mono ${forecaster.logScore > -0.5 ? 'text-green-400' : forecaster.logScore < -1.5 ? 'text-red-400' : 'text-slate-300'}">${ui.formatNumber(forecaster.logScore, 3)}</td>
                 <td class="py-3 px-4 text-center font-mono ${forecaster.sphericalScore > 0.8 ? 'text-green-400' : forecaster.sphericalScore < 0.6 ? 'text-red-400' : 'text-slate-300'}">${ui.formatNumber(forecaster.sphericalScore, 3)}</td>

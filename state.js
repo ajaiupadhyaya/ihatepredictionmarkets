@@ -13,7 +13,8 @@ export const state = {
             end: new Date()
         },
         platform: 'all',
-        category: 'all'
+        category: 'all',
+        focusMarketId: 'all'
     },
     
     // Settings
@@ -29,7 +30,21 @@ export const state = {
     
     // Cache
     cache: new Map(),
-    lastUpdate: null
+    lastUpdate: null,
+
+    // Data quality and provenance metadata
+    dataQuality: {
+        mode: 'unknown',
+        confidence: 0,
+        coverage: 0,
+        sourceCounts: {
+            polymarket: 0,
+            kalshi: 0,
+            metaculus: 0
+        },
+        notes: [],
+        generatedAt: null
+    }
 };
 
 // Helper to get filtered markets

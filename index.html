@@ -59,6 +59,14 @@
                         <option value="other">Other</option>
                     </select>
                 </div>
+
+                <!-- Focus Market -->
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-400">Focus Bet:</label>
+                    <select id="focus-market" class="bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300 max-w-56">
+                        <option value="all">All Markets</option>
+                    </select>
+                </div>
                 
                 <!-- Live Data Toggle -->
                 <label class="flex items-center gap-2 cursor-pointer">
@@ -78,6 +86,12 @@
                             <button class="nav-item active" data-module="home">
                                 <span class="nav-number">🏠</span>
                                 <span class="nav-text">Overview</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button class="nav-item" data-module="research-report">
+                                <span class="nav-number">R1</span>
+                                <span class="nav-text">Research Report (NYT/PE)</span>
                             </button>
                         </li>
                         <li>
@@ -174,6 +188,18 @@
                 <div class="flex items-center gap-2">
                     <span class="text-slate-500">Markets Loaded:</span>
                     <span id="markets-loaded" class="text-amber-400 font-mono">0</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-slate-500">Mode:</span>
+                    <span id="data-mode" class="text-slate-300 font-mono">unknown</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-slate-500">Confidence:</span>
+                    <span id="data-confidence" class="text-slate-300 font-mono">0%</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-slate-500">Coverage:</span>
+                    <span id="data-coverage" class="text-slate-300 font-mono">0%</span>
                 </div>
             </div>
             

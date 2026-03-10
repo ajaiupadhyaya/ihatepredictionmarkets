@@ -4,40 +4,88 @@
 
 const FETCH_TIMEOUT = 15000; // 15 second timeout
 
+function getEndpointCandidates() {
+    if (typeof window === 'undefined') {
+        return ['http://localhost:3001/api/kalshi'];
+    }
+
+    return ['/api/kalshi', 'http://localhost:3001/api/kalshi'];
+}
+
+function normalizeProxyResult(result) {
+    if (result && typeof result === 'object' && Object.prototype.hasOwnProperty.call(result, 'success')) {
+        if (!result.success) {
+            throw new Error(result.error || 'Proxy request failed');
+        }
+        return result.data;
+    }
+
+    return result;
+}
+
 /**
  * Fetch markets from Kalshi (via backend proxy)
  */
 export async function fetchMarkets() {
     try {
-        console.log('[KL] Kalshi: Fetching from backend proxy...');
-        
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
-        
-        const response = await fetch('http://localhost:3001/api/kalshi', {
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        console.log('[KL] Response status:', response.status, 'OK:', response.ok);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        console.log('[KL] Kalshi: Fetching live data...');
+
+        let payload = null;
+        let lastError = null;
+        const endpoints = getEndpointCandidates();
+
+        const fetchPayload = async (endpoint, status) => {
+            const separator = endpoint.includes('?') ? '&' : '?';
+            const requestUrl = `${endpoint}${separator}status=${encodeURIComponent(status)}&limit=100`;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+
+            try {
+                const response = await fetch(requestUrl, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    signal: controller.signal
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                return normalizeProxyResult(result);
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        };
+
+        for (const endpoint of endpoints) {
+            try {
+                const [activePayload, closedPayload] = await Promise.all([
+                    fetchPayload(endpoint, 'open'),
+                    fetchPayload(endpoint, 'closed')
+                ]);
+
+                const activeMarkets = activePayload?.markets || [];
+                const closedMarkets = closedPayload?.markets || [];
+                const merged = [...activeMarkets, ...closedMarkets];
+                const deduped = Array.from(new Map(merged.map(market => [market.ticker, market])).values());
+
+                payload = { markets: deduped };
+                console.log('[KL] Data source:', endpoint);
+                break;
+            } catch (error) {
+                lastError = error;
+                console.warn(`[KL] Endpoint failed (${endpoint}):`, error.message);
+            }
         }
-        
-        const result = await response.json();
-        console.log('[KL] Response JSON received, success:', result.success);
-        
-        if (!result.success) {
-            throw new Error(result.error || 'Proxy request failed');
+
+        if (!payload) {
+            throw lastError || new Error('No Kalshi endpoint responded');
         }
-        
-        const data = result.data;
+
+        const data = payload;
         const markets = data.markets || [];
         console.log(`[KL] Got ${markets.length} markets`);
         
@@ -81,6 +129,22 @@ function transformKalshiData(market) {
     }
     
     const title = market.title || market.subtitle || 'Unknown Market';
+    const status = String(market.status || '').toLowerCase();
+    const resolvedStatuses = new Set(['determined', 'closed', 'settled', 'finalized']);
+    const resolved = resolvedStatuses.has(status);
+
+    let currentProbability = 0.5;
+    if (market.last_price !== undefined && market.last_price !== null) {
+        currentProbability = Number(market.last_price) / 100;
+    } else if (market.yes_bid !== undefined && market.yes_bid !== null && market.yes_ask !== undefined && market.yes_ask !== null) {
+        currentProbability = (Number(market.yes_bid) + Number(market.yes_ask)) / 200;
+    } else if (market.yes_bid !== undefined && market.yes_bid !== null) {
+        currentProbability = Number(market.yes_bid) / 100;
+    }
+
+    currentProbability = Math.max(0.01, Math.min(0.99, currentProbability));
+    const result = String(market.result || '').toLowerCase();
+    const outcome = result === 'yes' ? 1 : (result === 'no' ? 0 : null);
     
     return {
         id: `kalshi_${market.ticker}`,
@@ -88,11 +152,11 @@ function transformKalshiData(market) {
         category: market.category || 'other',
         platform: 'kalshi',
         createdAt: market.open_time || new Date().toISOString(),
-        resolvedAt: market.close_time && market.status === 'closed' ? market.close_time : null,
-        resolved: market.status === 'closed',
-        outcome: market.result ? (market.result === 'yes' ? 1 : 0) : null,
-        currentProbability: market.last_price ? parseFloat(market.last_price) / 100 : 0.5,
-        finalProbability: market.status === 'closed' && market.last_price ? parseFloat(market.last_price) / 100 : null,
+        resolvedAt: resolved ? (market.close_time || market.expiration_time || null) : null,
+        resolved,
+        outcome,
+        currentProbability,
+        finalProbability: resolved ? currentProbability : null,
         volume: market.volume ? parseFloat(market.volume) : 0,
         liquidity: market.open_interest ? parseFloat(market.open_interest) : 0,
         traders: 0,

@@ -16,7 +16,12 @@ export default class SentimentModule {
         this.data = await getModuleData('sentiment');
         
         if (!this.data || !this.data.timeseries || this.data.timeseries.length === 0) {
-            this.container.innerHTML = '<div class="error-card"><div class="error-title">No Data Available</div></div>';
+            this.container.innerHTML = `
+                <div class="card p-6">
+                    <div class="card-title mb-2">Sentiment Timeline Needs More History</div>
+                    <p class="text-slate-400 text-sm leading-relaxed">Insufficient sequential points were found in this scope. Try "All Markets" or a wider date range to enable sentiment/price lead-lag analysis.</p>
+                </div>
+            `;
             return;
         }
         
@@ -80,7 +85,7 @@ export default class SentimentModule {
     
     renderTimeseriesChart() {
         const container = d3.select('#timeseries-chart');
-        const width = container.node().clientWidth();
+        const width = container.node().clientWidth;
         const height = 450;
         const margin = { top: 20, right: 60, bottom: 50, left: 60 };
         
@@ -100,6 +105,14 @@ export default class SentimentModule {
             ...d,
             timestamp: new Date(d.timestamp)
         }));
+
+        const divergenceData = data.map(point => ({
+            ...point,
+            sentimentAsProb: (Number(point.sentiment) + 1) / 2,
+            divergence: Math.abs(Number(point.probability) - ((Number(point.sentiment) + 1) / 2))
+        }));
+
+        const maxDivergencePoint = divergenceData.reduce((best, point) => point.divergence > best.divergence ? point : best, divergenceData[0]);
         
         // Scales
         const x = d3.scaleTime()
@@ -113,6 +126,18 @@ export default class SentimentModule {
         const ySentiment = d3.scaleLinear()
             .domain([-1, 1])
             .range([chartHeight, 0]);
+
+        const divergenceArea = d3.area()
+            .x(d => x(d.timestamp))
+            .y0(d => yPrice(d.probability))
+            .y1(d => yPrice(d.sentimentAsProb))
+            .curve(d3.curveMonotoneX);
+
+        g.append('path')
+            .datum(divergenceData)
+            .attr('d', divergenceArea)
+            .attr('fill', '#fbbf24')
+            .attr('opacity', 0.08);
         
         // Price line
         const priceLine = d3.line()
@@ -151,6 +176,22 @@ export default class SentimentModule {
             .ease(d3.easeLinear)
             .attr('stroke-dashoffset', 0)
             .on('end', () => pricePath.attr('stroke-dasharray', null));
+
+        g.append('circle')
+            .attr('cx', x(maxDivergencePoint.timestamp))
+            .attr('cy', yPrice(maxDivergencePoint.probability))
+            .attr('r', 4)
+            .attr('fill', '#fbbf24')
+            .attr('stroke', '#0f172a')
+            .attr('stroke-width', 1.2);
+
+        g.append('text')
+            .attr('x', x(maxDivergencePoint.timestamp) + 8)
+            .attr('y', yPrice(maxDivergencePoint.probability) - 8)
+            .attr('fill', '#fbbf24')
+            .attr('font-size', '10px')
+            .attr('font-weight', '600')
+            .text(`Max Divergence ${ui.formatPercent(maxDivergencePoint.divergence, 1)}`);
         
         // Zero line for sentiment
         g.append('line')
@@ -230,6 +271,15 @@ export default class SentimentModule {
             .attr('fill', '#e2e8f0')
             .attr('font-size', '11px')
             .text('Sentiment Score');
+
+        const avgDivergence = stats.mean(divergenceData.map(point => point.divergence));
+        g.append('text')
+            .attr('x', chartWidth - 8)
+            .attr('y', 14)
+            .attr('text-anchor', 'end')
+            .attr('fill', '#fbbf24')
+            .attr('font-size', '10px')
+            .text(`Avg model/market divergence: ${ui.formatPercent(avgDivergence, 1)}`);
     }
     
     renderScatterChart() {
@@ -266,6 +316,11 @@ export default class SentimentModule {
             priceChange: d.probability - data[i].probability,
             probability: d.probability
         }));
+
+        if (scatterData.length < 2) {
+            container.html('<div class="text-slate-400 p-4">Insufficient live history for scatter/regression view</div>');
+            return;
+        }
         
         // Linear regression
         const sentimentVals = scatterData.map(d => d.sentiment);
@@ -384,6 +439,11 @@ export default class SentimentModule {
         // Calculate cross-correlation
         const sentiments = this.data.timeseries.map(d => d.sentiment);
         const probabilities = this.data.timeseries.map(d => d.probability);
+
+        if (sentiments.length < 3 || probabilities.length < 3) {
+            container.html('<div class="text-slate-400 p-4">Insufficient live history for correlation analysis</div>');
+            return;
+        }
         
         const maxLag = 20;
         const correlations = [];
@@ -392,6 +452,10 @@ export default class SentimentModule {
             const corr = stats.crossCorrelation(sentiments, probabilities, lag);
             correlations.push({ lag, correlation: corr });
         }
+
+        const bestLag = correlations.reduce((best, entry) => (
+            Math.abs(entry.correlation) > Math.abs(best.correlation) ? entry : best
+        ), correlations[0]);
         
         // Scales
         const x = d3.scaleLinear()
@@ -423,7 +487,7 @@ export default class SentimentModule {
             .attr('width', barWidth)
             .attr('y', d => d.correlation > 0 ? y(d.correlation) : y(0))
             .attr('height', 0)
-            .attr('fill', d => d.correlation > 0 ? '#10b981' : '#ef4444')
+            .attr('fill', d => d.lag === bestLag.lag ? '#fbbf24' : (d.correlation > 0 ? '#10b981' : '#ef4444'))
             .attr('opacity', 0.8);
         
         // Animate
@@ -431,6 +495,29 @@ export default class SentimentModule {
             .duration(600)
             .delay((d, i) => i * 20)
             .attr('height', d => Math.abs(y(d.correlation) - y(0)));
+
+        g.append('line')
+            .attr('x1', x(bestLag.lag))
+            .attr('x2', x(bestLag.lag))
+            .attr('y1', 0)
+            .attr('y2', chartHeight)
+            .attr('stroke', '#fbbf24')
+            .attr('stroke-width', 1.2)
+            .attr('stroke-dasharray', '5,4');
+
+        const lagLabel = bestLag.lag < 0
+            ? `Sentiment leads by ${Math.abs(bestLag.lag)} periods`
+            : bestLag.lag > 0
+                ? `Sentiment lags by ${bestLag.lag} periods`
+                : 'Synchronous signal (lag 0)';
+
+        g.append('text')
+            .attr('x', x(bestLag.lag) + 6)
+            .attr('y', 14)
+            .attr('fill', '#fbbf24')
+            .attr('font-size', '10px')
+            .attr('font-weight', '600')
+            .text(`${lagLabel}, |ρ|=${ui.formatNumber(Math.abs(bestLag.correlation), 2)}`);
         
         // Axes
         g.append('g')
@@ -512,6 +599,16 @@ export default class SentimentModule {
         
         // Granger causality
         const grangerResult = stats.grangerCausality(sentiments, probabilities, 3);
+
+        const lagWindow = d3.range(-12, 13).map(lag => ({ lag, corr: stats.crossCorrelation(sentiments, probabilities, lag) }));
+        const dominantLag = lagWindow.reduce((best, current) => (
+            Math.abs(current.corr) > Math.abs(best.corr) ? current : best
+        ), lagWindow[0]);
+        const dominantLagText = dominantLag.lag < 0
+            ? `Leads ${Math.abs(dominantLag.lag)}p`
+            : dominantLag.lag > 0
+                ? `Lags ${dominantLag.lag}p`
+                : 'Lag 0';
         
         const statsData = {
             'Observations': this.data.timeseries.length,
@@ -521,9 +618,8 @@ export default class SentimentModule {
             'Sentiment Std Dev': ui.formatNumber(stdSentiment, 3),
             'Granger p-value': ui.formatNumber(grangerResult.pValue, 4),
             'Sentiment → Price': grangerResult.pValue < 0.05 ? 'Yes' : 'No',
-            'Max Cross-Corr': ui.formatNumber(Math.max(...this.data.timeseries.map((_, i) => 
-                Math.abs(stats.crossCorrelation(sentiments, probabilities, i))
-            )), 3)
+            'Max Cross-Corr': ui.formatNumber(Math.abs(dominantLag.corr), 3),
+            'Dominant Lag': dominantLagText
         };
         
         const statsPanel = document.getElementById('stats-panel');

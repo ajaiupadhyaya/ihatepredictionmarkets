@@ -18,6 +18,10 @@ export default class HomeModule {
         try {
             // Fetch comprehensive data
             this.data = await getModuleData('all');
+            
+            console.log('[HOME] Render called. this.data:', this.data);
+            console.log('[HOME] this.data.markets.length:', this.data?.markets?.length);
+            console.log('[HOME] this.data.summary:', this.data?.summary);
 
             // Build layout
             this.container.innerHTML = `
@@ -67,6 +71,10 @@ export default class HomeModule {
                         <!-- 3D Visualization -->
                         <div id="hero-visualization" class="hero-viz"></div>
                     </div>
+
+                    <div id="analysis-heartbeat" class="analysis-heartbeat"></div>
+
+                    <div id="ai-editorial-panel" class="analysis-heartbeat"></div>
 
                     <!-- Analysis Overview -->
                     <div id="ai-dashboard-container" class="ai-dashboard-container"></div>
@@ -177,6 +185,9 @@ export default class HomeModule {
             this.threeViz.animate();
         }
 
+        this.renderAnalysisHeartbeat();
+    this.renderAIEditorialPanel();
+
         // Render quick stats visualizations
         this.renderQuickStats();
 
@@ -286,6 +297,9 @@ export default class HomeModule {
                     } else if (this.aiDashboard) {
                         await this.aiDashboard.render(this.data);
                     }
+
+                    this.renderAnalysisHeartbeat();
+                    this.renderAIEditorialPanel();
                     
                     // Update stats
                     this.renderQuickStats();
@@ -412,6 +426,204 @@ export default class HomeModule {
                 </div>
             `;
         }
+    }
+
+    renderAnalysisHeartbeat() {
+        const container = document.getElementById('analysis-heartbeat');
+        if (!container) return;
+
+        const markets = this.data?.markets || [];
+        const dataQuality = this.data?.dataQuality || this.state?.dataQuality || {};
+
+        if (markets.length === 0) {
+            container.innerHTML = `
+                <div class="heartbeat-shell">
+                    <div class="heartbeat-header-row">
+                        <h2 class="heartbeat-title">Analysis Heartbeat</h2>
+                        <div class="heartbeat-kicker">No active evidence set</div>
+                    </div>
+                    <div class="heartbeat-empty">
+                        No market data is currently available. Load data to generate thesis, evidence, uncertainty, and next-step investigative prompts.
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        const summary = this.buildInvestigativeSummary(markets, dataQuality);
+
+        container.innerHTML = `
+            <div class="heartbeat-shell">
+                <div class="heartbeat-header-row">
+                    <h2 class="heartbeat-title">Analysis Heartbeat</h2>
+                    <div class="heartbeat-kicker">Editorial framing over raw charts</div>
+                </div>
+                <div class="heartbeat-grid">
+                    <article class="heartbeat-card">
+                        <h3>Thesis</h3>
+                        <p>${summary.thesis}</p>
+                    </article>
+                    <article class="heartbeat-card">
+                        <h3>Evidence</h3>
+                        <p>${summary.evidence}</p>
+                    </article>
+                    <article class="heartbeat-card">
+                        <h3>Uncertainty</h3>
+                        <p>${summary.uncertainty}</p>
+                    </article>
+                    <article class="heartbeat-card">
+                        <h3>Next Investigation</h3>
+                        <p>${summary.nextStep}</p>
+                    </article>
+                </div>
+            </div>
+        `;
+    }
+
+    buildInvestigativeSummary(markets, dataQuality) {
+        const safeMarkets = Array.isArray(markets) ? markets : [];
+        const resolved = safeMarkets.filter(market => market.resolved);
+        const totalVolume = safeMarkets.reduce((sum, market) => sum + Number(market.volume || 0), 0);
+        const top10Volume = [...safeMarkets]
+            .map(market => Number(market.volume || 0))
+            .sort((a, b) => b - a)
+            .slice(0, 10)
+            .reduce((sum, volume) => sum + volume, 0);
+        const concentration = totalVolume > 0 ? top10Volume / totalVolume : 0;
+
+        const conviction = safeMarkets.length > 0
+            ? safeMarkets.reduce((sum, market) => {
+                const prob = Number(market.currentProbability ?? market.finalProbability ?? 0.5);
+                return sum + Math.abs(prob - 0.5);
+            }, 0) / safeMarkets.length
+            : 0;
+
+        const predicted = resolved
+            .map(market => Number(market.finalProbability))
+            .filter(value => Number.isFinite(value));
+        const outcomes = resolved
+            .map(market => Number(market.outcome))
+            .filter(value => value === 0 || value === 1);
+
+        let calibrationGap = null;
+        if (predicted.length > 0 && outcomes.length > 0) {
+            const pairedLength = Math.min(predicted.length, outcomes.length);
+            const avgPredicted = predicted.slice(0, pairedLength).reduce((sum, value) => sum + value, 0) / pairedLength;
+            const avgOutcome = outcomes.slice(0, pairedLength).reduce((sum, value) => sum + value, 0) / pairedLength;
+            calibrationGap = Math.abs(avgPredicted - avgOutcome);
+        }
+
+        const confidencePct = Math.round(Number(dataQuality?.confidence || 0) * 100);
+        const coveragePct = Math.round(Number(dataQuality?.coverage || 0) * 100);
+
+        return {
+            thesis: `Market attention is concentrated (${(concentration * 100).toFixed(1)}% of volume sits in the top 10 markets), while average conviction is ${(conviction * 100).toFixed(1)} points away from neutral pricing.`,
+            evidence: `Loaded ${safeMarkets.length} markets (${resolved.length} resolved) with data confidence at ${confidencePct}% and coverage at ${coveragePct}%. This snapshot is best for directional structure analysis before deep causal claims.`,
+            uncertainty: calibrationGap === null
+                ? 'Not enough resolved markets with valid probabilities to estimate calibration drift robustly.'
+                : `Aggregate calibration gap is ${(calibrationGap * 100).toFixed(1)} points between implied probabilities and realized outcomes; investigate category-level pockets before drawing global conclusions.`,
+            nextStep: 'Use Crowd vs Experts and Price Discovery to test whether the largest-volume markets are information leaders or simply attention magnets, then validate with Tail Risk and Calibration decomposition.'
+        };
+    }
+
+    renderAIEditorialPanel() {
+        const container = document.getElementById('ai-editorial-panel');
+        if (!container) return;
+
+        const focusedMarket = this.data?.markets?.find(market => market.id === this.state?.filters?.focusMarketId);
+        const fallbackMarket = this.data?.markets?.[0] || null;
+        const market = focusedMarket || fallbackMarket;
+
+        container.innerHTML = `
+            <div class="heartbeat-shell">
+                <div class="heartbeat-header-row">
+                    <h2 class="heartbeat-title">Editorial Analysis</h2>
+                    <div class="heartbeat-kicker">AI-assisted narrative (server-side key)</div>
+                </div>
+                <div class="heartbeat-card" style="margin-bottom: 12px;">
+                    <h3>Focus</h3>
+                    <p>${market ? market.title : 'No market selected'}${market ? ` (${market.platform || 'unknown'})` : ''}</p>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px;">
+                    <button id="generate-editorial-analysis" class="action-btn" style="padding: 8px 12px;">
+                        Generate Narrative Analysis
+                    </button>
+                    <span class="text-xs text-slate-400">Uses /api/text-analysis endpoint; API key stays on server.</span>
+                </div>
+                <div id="editorial-analysis-output" class="heartbeat-empty">Generate an analysis to see a concise thesis, key claims, caveats, and follow-up questions for this focused market.</div>
+            </div>
+        `;
+
+        const button = document.getElementById('generate-editorial-analysis');
+        const output = document.getElementById('editorial-analysis-output');
+        if (!button || !output) return;
+
+        button.addEventListener('click', async () => {
+            button.disabled = true;
+            button.textContent = 'Analyzing...';
+
+            try {
+                const payload = market
+                    ? {
+                        text: JSON.stringify({
+                            title: market.title,
+                            category: market.category,
+                            platform: market.platform,
+                            probability: market.currentProbability ?? market.finalProbability ?? 0.5,
+                            resolved: market.resolved,
+                            outcome: market.outcome,
+                            volume: market.volume
+                        }, null, 2),
+                        context: 'Prediction market investigative writeup'
+                    }
+                    : {
+                        text: JSON.stringify(this.data?.summary || {}, null, 2),
+                        context: 'Prediction market summary investigative writeup'
+                    };
+
+                const response = await fetch('/api/text-analysis', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                if (!response.ok || !result?.success) {
+                    throw new Error(result?.error || `Request failed (${response.status})`);
+                }
+
+                const analysis = result.analysis || {};
+                const keyClaims = Array.isArray(analysis.keyClaims) ? analysis.keyClaims : [];
+                const caveats = Array.isArray(analysis.caveats) ? analysis.caveats : [];
+                const followups = Array.isArray(analysis.suggestedFollowups) ? analysis.suggestedFollowups : [];
+
+                output.innerHTML = `
+                    <div class="heartbeat-grid" style="grid-template-columns: 1fr;">
+                        <article class="heartbeat-card">
+                            <h3>Summary</h3>
+                            <p>${analysis.summary || 'No summary returned.'}</p>
+                        </article>
+                        <article class="heartbeat-card">
+                            <h3>Key Claims</h3>
+                            <p>${keyClaims.length > 0 ? keyClaims.map(claim => `• ${claim}`).join('<br/>') : 'No key claims returned.'}</p>
+                        </article>
+                        <article class="heartbeat-card">
+                            <h3>Caveats</h3>
+                            <p>${caveats.length > 0 ? caveats.map(caveat => `• ${caveat}`).join('<br/>') : 'No caveats returned.'}</p>
+                        </article>
+                        <article class="heartbeat-card">
+                            <h3>Follow-ups</h3>
+                            <p>${followups.length > 0 ? followups.map(item => `• ${item}`).join('<br/>') : 'No follow-ups returned.'}</p>
+                        </article>
+                    </div>
+                `;
+            } catch (error) {
+                output.innerHTML = `Unable to generate analysis: ${error.message}. Ensure server is running and OPENAI_API_KEY is configured.`;
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Generate Narrative Analysis';
+            }
+        });
     }
 
     create3DNetworkPreview() {
@@ -811,6 +1023,74 @@ export default class HomeModule {
 
             .ai-dashboard-container {
                 margin-bottom: 48px;
+            }
+
+            .analysis-heartbeat {
+                margin-bottom: 32px;
+            }
+
+            .heartbeat-shell {
+                background: var(--color-bg-secondary);
+                border: 1px solid var(--color-border);
+                border-radius: 12px;
+                padding: 20px;
+            }
+
+            .heartbeat-header-row {
+                display: flex;
+                align-items: baseline;
+                justify-content: space-between;
+                margin-bottom: 16px;
+            }
+
+            .heartbeat-title {
+                font-size: 18px;
+                font-weight: 700;
+                color: var(--color-text-primary);
+            }
+
+            .heartbeat-kicker {
+                font-size: 12px;
+                color: var(--color-text-secondary);
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+            }
+
+            .heartbeat-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                gap: 14px;
+            }
+
+            .heartbeat-card {
+                background: var(--color-bg-tertiary);
+                border: 1px solid var(--color-border);
+                border-radius: 10px;
+                padding: 14px;
+            }
+
+            .heartbeat-card h3 {
+                color: var(--color-accent-cyan);
+                font-size: 13px;
+                letter-spacing: 0.06em;
+                margin: 0 0 8px;
+                text-transform: uppercase;
+            }
+
+            .heartbeat-card p {
+                margin: 0;
+                color: var(--color-text-secondary);
+                font-size: 13px;
+                line-height: 1.6;
+            }
+
+            .heartbeat-empty {
+                color: var(--color-text-secondary);
+                font-size: 14px;
+                line-height: 1.6;
+                border: 1px dashed var(--color-border);
+                border-radius: 10px;
+                padding: 16px;
             }
 
             .quick-stats-grid {
