@@ -19,7 +19,8 @@ const moduleLoaders = {
     'leaderboard': () => import('./modules/leaderboard/index.js').then(m => m.default),
     'whales': () => import('./modules/whales/index.js').then(m => m.default),
     'tail-risk': () => import('./modules/tail-risk/index.js').then(m => m.default),
-    'temporal': () => import('./modules/temporal/index.js').then(m => m.default)
+    'temporal': () => import('./modules/temporal/index.js').then(m => m.default),
+    'explorer': () => import('./modules/explorer/index.js').then(m => m.default)
 };
 
 let currentModule = null;
